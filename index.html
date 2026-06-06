@@ -1,0 +1,2845 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-accent="orange">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Note Buddy</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.11/dist/dexie.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* ============ Design tokens ============ */
+    :root {
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+
+      --accent: #3b82f6;
+      --accent-press: #2563eb;
+      --accent-soft: rgba(59,130,246,.13);
+      --accent-contrast: #ffffff;
+
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --surface-2: #f1f3f6;
+      --surface-hover: #f4f6f9;
+      --text: #1b1f24;
+      --text-2: #545b65;
+      --muted: #8b929c;
+      --border: #e6e8ec;
+      --border-strong: #d7dae0;
+      --danger: #e5484d;
+
+      --shadow-sm: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.05);
+      --shadow-md: 0 4px 14px rgba(16,24,40,.08);
+      --shadow-lg: 0 16px 40px rgba(16,24,40,.14);
+
+      --radius: 10px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+      color-scheme: light;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0c0e11;
+      --surface: #15181d;
+      --surface-2: #1b1f25;
+      --surface-hover: #1f242b;
+      --text: #e8eaee;
+      --text-2: #a6adb6;
+      --muted: #6d747d;
+      --border: #262a31;
+      --border-strong: #353b43;
+      --danger: #f0686d;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+      --shadow-md: 0 4px 16px rgba(0,0,0,.45);
+      --shadow-lg: 0 18px 44px rgba(0,0,0,.55);
+      color-scheme: dark;
+    }
+
+    /* accent palette */
+    [data-accent="orange"] { --accent:#f97316; --accent-press:#ea580c; --accent-soft:rgba(249,115,22,.15); }
+    [data-accent="blue"]   { --accent:#3b82f6; --accent-press:#2563eb; --accent-soft:rgba(59,130,246,.14); }
+    [data-accent="violet"] { --accent:#7c5cff; --accent-press:#6a45f0; --accent-soft:rgba(124,92,255,.15); }
+    [data-accent="green"]  { --accent:#16a34a; --accent-press:#15803d; --accent-soft:rgba(22,163,74,.15); }
+    [data-accent="amber"]  { --accent:#e08600; --accent-press:#b45309; --accent-soft:rgba(224,134,0,.16); }
+    [data-accent="rose"]   { --accent:#e5484d; --accent-press:#d93640; --accent-soft:rgba(229,72,77,.15); }
+    [data-accent="teal"]   { --accent:#0d9488; --accent-press:#0f766e; --accent-soft:rgba(13,148,136,.15); }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px; font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+      transition: background .25s ease, color .25s ease;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { border: 0; cursor: pointer; background: none; }
+    i[data-lucide], svg[data-lucide] { width: 17px; height: 17px; stroke-width: 2; flex: 0 0 auto; }
+    ::selection { background: var(--accent-soft); }
+
+    /* ============ Shell ============ */
+    .app {
+      display: grid;
+      grid-template-columns: 264px 384px minmax(520px, 1fr);
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .sidebar, .note-list, .editor-shell { min-width: 0; min-height: 0; }
+
+    /* ============ Sidebar ============ */
+    .sidebar {
+      display: flex; flex-direction: column; gap: 16px;
+      padding: 20px 16px 16px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow: auto;
+    }
+    .brand-row { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 4px; }
+    .brand-word { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+    .brand-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--accent-contrast); background: var(--accent); box-shadow: var(--shadow-sm); }
+    .brand-mark svg { width: 15px; height: 15px; }
+    .theme-toggle { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-2); }
+    .theme-toggle:hover { background: var(--surface-hover); color: var(--text); }
+
+    .new-note-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; min-height: 40px; border-radius: var(--radius-sm);
+      color: var(--accent-contrast); background: var(--accent);
+      font-size: 14px; font-weight: 600; box-shadow: var(--shadow-sm);
+      transition: background .15s ease, transform .12s ease;
+    }
+    .new-note-btn:hover { background: var(--accent-press); }
+    .new-note-btn:active { transform: translateY(1px); }
+
+    .tool-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .tool-row .icon-btn { min-height: 34px; }
+    .icon-btn {
+      display: inline-grid; place-items: center; gap: 0;
+      min-height: 34px; padding: 0 8px; border-radius: var(--radius-sm);
+      color: var(--text-2); background: var(--surface-2);
+      transition: background .15s ease, color .15s ease;
+    }
+    .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; min-height: 22px; margin-top: 4px; padding: 0 6px; }
+    .section-label { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    .mini-add { width: 22px; height: 22px; min-height: 22px; border-radius: 6px; color: var(--muted); }
+    .mini-add:hover { background: var(--surface-hover); color: var(--text); }
+
+    .folder-list { display: flex; flex-direction: column; gap: 2px; }
+    .folder-item {
+      display: grid; grid-template-columns: 18px minmax(0,1fr) auto auto; align-items: center; gap: 9px;
+      width: 100%; min-height: 34px; padding: 0 6px 0 10px;
+      border: 1px solid transparent; border-radius: var(--radius-sm);
+      color: var(--text-2); background: transparent; font-size: 13.5px; text-align: left; cursor: grab;
+      transition: background .12s ease, color .12s ease;
+    }
+    .folder-item svg { width: 16px; height: 16px; color: var(--muted); }
+    .folder-item:hover { background: var(--surface-hover); color: var(--text); }
+    .folder-item.active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+    .folder-item.active svg { color: var(--accent); }
+    .folder-item:active { cursor: grabbing; }
+    .folder-item.dragging { opacity: .45; }
+    .folder-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+    .folder-item.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+    .folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .folder-actions { display: inline-flex; align-items: center; gap: 1px; opacity: 0; transition: opacity .12s ease; }
+    .folder-item:hover .folder-actions { opacity: 1; }
+    .folder-item:hover .count.has-actions { display: none; }
+    .folder-icon-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--muted); }
+    .folder-icon-btn svg { width: 13px; height: 13px; }
+    .folder-icon-btn:hover { color: var(--text); background: var(--surface-2); }
+    .folder-delete:hover { color: var(--danger); }
+    .folder-pin.is-pinned { color: var(--accent); }
+    .folder-pin.is-pinned svg { color: var(--accent); }
+
+    /* tags in sidebar */
+    .tag-list { display: flex; flex-direction: column; gap: 1px; }
+    .tag-row {
+      display: grid; grid-template-columns: 12px minmax(0,1fr) auto auto; align-items: center; gap: 9px;
+      min-height: 30px; padding: 0 6px 0 10px; border-radius: var(--radius-sm);
+      color: var(--text-2); font-size: 13px; cursor: pointer;
+      transition: background .12s ease;
+    }
+    .tag-row:hover { background: var(--surface-hover); }
+    .tag-row.active { background: var(--accent-soft); color: var(--text); }
+    .tag-dot { width: 9px; height: 9px; border-radius: 999px; }
+    .tag-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag-row-actions { display: inline-flex; gap: 1px; opacity: 0; }
+    .tag-row:hover .tag-row-actions { opacity: 1; }
+    .tag-row:hover .tag-row-count { display: none; }
+    .tag-row-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .tag-empty { padding: 6px 10px; color: var(--muted); font-size: 12px; }
+
+    .filter-active-banner {
+      display: none; align-items: center; gap: 8px; margin: 0 2px;
+      padding: 7px 10px; border-radius: var(--radius-sm);
+      background: var(--accent-soft); color: var(--text); font-size: 12px;
+    }
+    .filter-active-banner.show { display: flex; }
+    .filter-active-banner button { margin-left: auto; color: var(--accent-press); font-weight: 600; font-size: 12px; }
+
+    .spacer { flex: 1 1 auto; }
+    .profile-card {
+      display: grid; grid-template-columns: 32px minmax(0,1fr) 30px; align-items: center; gap: 10px;
+      padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+    }
+    .avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; color: var(--accent-contrast); background: var(--accent); font-size: 12px; font-weight: 650; }
+    .profile-name { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .profile-sub { color: var(--muted); font-size: 11px; }
+
+    /* ============ Note list ============ */
+    .note-list { display: flex; flex-direction: column; gap: 14px; padding: 20px 16px 0; background: var(--bg); border-right: 1px solid var(--border); }
+    .list-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; }
+    .list-title { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; margin-left: -8px; border-radius: 8px; color: var(--text); font-size: 17px; font-weight: 650; letter-spacing: -.01em; cursor: pointer; }
+    .list-title:hover { background: var(--surface-hover); }
+    .list-title svg { width: 16px; height: 16px; color: var(--muted); }
+    .list-actions { display: inline-flex; gap: 4px; }
+    .ghost-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-2); position: relative; }
+    .ghost-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .ghost-btn.active { color: var(--accent); background: var(--accent-soft); }
+    .ghost-btn .dot-badge { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+
+    .search-wrap { position: relative; }
+    .search-wrap > svg { position: absolute; top: 50%; left: 12px; width: 16px; height: 16px; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
+    .search-input { width: 100%; height: 38px; padding: 0 12px 0 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: none; background: var(--surface); color: var(--text); font-size: 13.5px; transition: border-color .15s ease, box-shadow .15s ease; }
+    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .search-input::placeholder { color: var(--muted); }
+
+    .notes-scroll { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; padding-bottom: 18px; }
+    .note-item {
+      position: relative; display: flex; flex-direction: column; gap: 7px;
+      width: 100%; padding: 13px 40px 13px 14px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--surface); text-align: left; cursor: grab;
+      transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+    .note-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+    .note-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
+    .note-item:active { cursor: grabbing; }
+    .note-item.dragging { opacity: .45; }
+    .note-item.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+    .note-item.drop-after { box-shadow: 0 2px 0 var(--accent); }
+    .note-item-top { display: flex; align-items: center; gap: 7px; }
+    .note-title { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; outline: 0; }
+    .note-title:focus { white-space: normal; }
+    .note-pin-badge { width: 13px; height: 13px; color: var(--accent); flex: 0 0 auto; }
+    .note-preview { overflow: hidden; color: var(--text-2); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .note-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .note-time { color: var(--muted); font-size: 11.5px; }
+    .note-tags { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+    .note-menu-trigger { position: absolute; right: 8px; top: 10px; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--muted); opacity: 0; transition: opacity .12s ease; }
+    .note-item:hover .note-menu-trigger { opacity: 1; }
+    .note-menu-trigger:hover { background: var(--surface-2); color: var(--text); }
+
+    /* tag chips */
+    .tag {
+      display: inline-flex; align-items: center; gap: 5px; max-width: 140px; min-height: 19px;
+      padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap;
+    }
+    .tag .x { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 999px; opacity: .6; margin-right: -3px; }
+    .tag .x:hover { opacity: 1; background: rgba(0,0,0,.12); }
+    .tag-name { overflow: hidden; text-overflow: ellipsis; }
+
+    /* tag color palette */
+    .tg-slate  { background:#eceef1; color:#4a525c; } .tg-red   { background:#fde8e8; color:#c0383e; }
+    .tg-amber  { background:#fbeccb; color:#9a6206; } .tg-green { background:#dcf3e3; color:#1c7a40; }
+    .tg-blue   { background:#e3edfd; color:#2563eb; } .tg-violet{ background:#ece6fe; color:#6a45f0; }
+    .tg-teal   { background:#d6f1ec; color:#0f766e; } .tg-pink  { background:#fce3ef; color:#c03a78; }
+    [data-theme="dark"] .tg-slate  { background:rgba(148,160,176,.18); color:#c4ccd6; }
+    [data-theme="dark"] .tg-red    { background:rgba(229,72,77,.20); color:#f4a3a6; }
+    [data-theme="dark"] .tg-amber  { background:rgba(224,134,0,.20); color:#f0c178; }
+    [data-theme="dark"] .tg-green  { background:rgba(22,163,74,.20); color:#86dfa5; }
+    [data-theme="dark"] .tg-blue   { background:rgba(59,130,246,.22); color:#9cc2fb; }
+    [data-theme="dark"] .tg-violet { background:rgba(124,92,255,.24); color:#c2b1ff; }
+    [data-theme="dark"] .tg-teal   { background:rgba(13,148,136,.22); color:#7fd8cd; }
+    [data-theme="dark"] .tg-pink   { background:rgba(229,72,141,.20); color:#f3a6c8; }
+    /* solid tag dots */
+    .dot-slate{background:#94a3b8}.dot-red{background:#e5484d}.dot-amber{background:#e08600}.dot-green{background:#16a34a}
+    .dot-blue{background:#3b82f6}.dot-violet{background:#7c5cff}.dot-teal{background:#0d9488}.dot-pink{background:#e5489a}
+
+    /* ============ Editor ============ */
+    .editor-shell { display: flex; flex-direction: column; background: var(--surface); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 22px; border-bottom: 1px solid var(--border); }
+    .topbar .row { display: flex; align-items: center; gap: 8px; }
+    .mobile-only { display: none; }
+    .select { height: 32px; max-width: 200px; padding: 0 28px 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: none; background: var(--surface-2) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b929c' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right 9px center; color: var(--text); font-size: 13px; -webkit-appearance: none; appearance: none; cursor: pointer; }
+    .select:focus { border-color: var(--accent); }
+    .move-wrap { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+    .editor-actions { display: flex; align-items: center; gap: 4px; }
+    .save-state-inline { color: var(--muted); font-size: 12px; white-space: nowrap; margin-right: 6px; }
+
+    .editor { flex: 1; min-height: 0; overflow: auto; padding: 0 32px 28px; }
+    #noteSurface { max-width: 720px; margin: 0 auto; padding-top: 26px; }
+    .note-title-input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: clamp(26px, 2.4vw, 32px); font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
+    .note-title-input::placeholder { color: var(--muted); opacity: .6; }
+
+    .note-tags-edit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+    .add-tag-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; padding: 0 10px; border: 1px dashed var(--border-strong); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 550; transition: all .12s ease; }
+    .add-tag-btn:hover { color: var(--text); border-color: var(--text-2); }
+    .add-tag-btn svg { width: 13px; height: 13px; }
+
+    .blocks { display: flex; flex-direction: column; gap: 4px; margin-top: 22px; }
+    .block { position: relative; border-radius: var(--radius-sm); padding: 2px 0; cursor: grab; }
+    .block:active { cursor: grabbing; }
+    .block.dragging { opacity: .5; }
+    .block.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+    .block.drop-after { box-shadow: 0 2px 0 var(--accent); }
+    .block-menu { position: absolute; top: -8px; right: -8px; left: auto; z-index: 2; opacity: 0; transition: opacity .12s ease; }
+    .block:hover .block-menu, .block:focus-within .block-menu { opacity: 1; }
+    .block-add-gutter { position: absolute; top: 1px; left: -32px; z-index: 2; opacity: 0; transition: opacity .12s ease; }
+    .block:hover .block-add-gutter, .block:focus-within .block-add-gutter { opacity: 1; }
+    .block-gutter-btn { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+    .block-gutter-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .block-gutter-btn svg { width: 16px; height: 16px; }
+    .block-action { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+    .block-action svg { width: 14px; height: 14px; }
+    .block-action:hover { background: var(--surface-2); color: var(--text); }
+    .block-action.danger:hover { background: var(--accent-soft); color: var(--danger); border-color: var(--danger); }
+
+    .editable { min-height: 26px; color: var(--text); outline: none; font-size: 15.5px; font-weight: 400; line-height: 1.65; overflow-wrap: anywhere; }
+    .editable:empty::before { content: attr(data-placeholder); color: var(--muted); opacity: .55; }
+    .editable ul { margin: 4px 0 0 20px; padding: 0; }
+    .editable li { margin: 3px 0; }
+    .text-block, .heading-block, .checklist-block { padding: 3px 0; }
+    .heading-block .editable { min-height: 30px; font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -.01em; }
+
+    .check-block { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 8px; align-items: start; }
+    .check-block input { width: 17px; height: 17px; margin-top: 6px; accent-color: var(--accent); cursor: pointer; }
+    .check-block.done .editable { color: var(--muted); text-decoration: line-through; }
+
+    .audio-shell, .chart-shell, .table-shell, .image-shell {
+      display: grid; gap: 12px; padding: 14px; margin: 6px 0;
+      border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); cursor: grab;
+    }
+    .audio-head, .block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .audio-title, .block-title { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); font-size: 14px; font-weight: 600; }
+    .audio-title svg, .block-title svg { color: var(--accent); }
+    audio { width: 100%; height: 38px; }
+    .media-video { width: 100%; max-height: 360px; border-radius: var(--radius-sm); background: #000; }
+    .image-empty { display: grid; place-items: center; gap: 8px; aspect-ratio: 1/1; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--muted); text-align: center; }
+    .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 4px; }
+    .image-tile { position: relative; margin: 0; aspect-ratio: 1/1; overflow: hidden; border-radius: 10px; background: var(--surface-2); cursor: zoom-in; }
+    .image-preview { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .image-add-tile { display: grid; place-items: center; aspect-ratio: 1/1; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--text-2); }
+    .image-add-tile:hover { color: var(--accent); border-color: var(--accent); }
+    .image-add-tile svg { width: 22px; height: 22px; }
+    .image-remove { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: rgba(0,0,0,.5); color: #fff; opacity: 0; transition: opacity .12s ease; }
+    .image-tile:hover .image-remove { opacity: 1; }
+    .image-remove svg { width: 13px; height: 13px; }
+    .file-card { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; margin: 6px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); text-align: left; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
+    .file-card:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+    .file-card-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--accent); flex: 0 0 auto; }
+    .file-card-icon svg { width: 20px; height: 20px; }
+    .file-card-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .file-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 14px; font-weight: 600; }
+    .file-card-sub { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+    .file-card-dl { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-2); flex: 0 0 auto; }
+    .file-card:hover .file-card-dl { color: var(--accent); background: var(--surface); }
+    .file-card-dl svg { width: 16px; height: 16px; }
+    .block-files { display: grid; gap: 6px; margin-top: 8px; }
+    .block-file-row, .block-file-media { display: flex; align-items: stretch; gap: 6px; }
+    .block-file-row .file-card { flex: 1; margin: 0; }
+    .block-file-media audio { flex: 1; align-self: center; }
+    .block-file-media video { flex: 1; }
+    .block-file-del { flex: 0 0 auto; display: grid; place-items: center; width: 38px; border-radius: var(--radius-sm); color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); }
+    .block-file-del:hover { color: var(--danger); border-color: var(--danger); }
+    .block-file-del svg { width: 14px; height: 14px; }
+    .file-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .file-chip { position: relative; display: inline-flex; align-items: center; gap: 7px; max-width: 220px; min-height: 32px; padding: 0 26px 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 12.5px; font-weight: 500; }
+    .file-chip:hover { border-color: var(--border-strong); background: var(--surface-2); }
+    .file-chip svg { width: 15px; height: 15px; color: var(--accent); }
+    .file-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-chip-x { position: absolute; right: 4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; color: var(--muted); }
+    .file-chip-x:hover { color: var(--danger); background: var(--surface-hover); }
+    .file-chip-x svg { width: 12px; height: 12px; color: var(--muted); }
+    .rich-shell { display: grid; gap: 10px; }
+    .rich-shell .image-grid { margin: 0; }
+    .rich-text { min-height: 24px; }
+    .rich-add-row { display: flex; justify-content: flex-end; }
+    .block-caption { font-size: 13.5px; color: var(--text-2); }
+    .block-caption:empty::before { font-size: 13.5px; }
+    .media-caption-row { display: flex; align-items: flex-start; gap: 8px; }
+    .media-caption-row .editable { flex: 1; min-width: 0; }
+    .caption-photo-btn { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm); color: var(--text-2); background: var(--surface); border: 1px solid var(--border); }
+    .caption-photo-btn:hover { color: var(--text); border-color: var(--accent); background: var(--surface-2); }
+    .caption-photo-btn svg { width: 15px; height: 15px; }
+    /* Lightbox */
+    .lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(8,10,14,.92); }
+    .lb-img { max-width: 92vw; max-height: 88vh; border-radius: 8px; object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,.5); user-select: none; }
+    .lb-close { position: fixed; top: 20px; right: 22px; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 999px; color: #fff; background: rgba(255,255,255,.12); }
+    .lb-close:hover { background: rgba(255,255,255,.22); }
+    .lb-nav { position: fixed; top: 50%; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; color: #fff; background: rgba(255,255,255,.12); transform: translateY(-50%); }
+    .lb-nav:hover { background: rgba(255,255,255,.22); }
+    .lb-prev { left: 22px; } .lb-next { right: 22px; }
+    .lb-nav svg, .lb-close svg { width: 22px; height: 22px; }
+    .lb-counter { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.12); color: #fff; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lb-nav.hidden, .lb-counter.hidden { display: none; }
+
+    .insert-bar { position: sticky; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 6px; margin-top: 24px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-md); overflow-x: auto; }
+    .tool-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border-radius: var(--radius-sm); color: var(--text-2); background: transparent; font-size: 12.5px; font-weight: 600; white-space: nowrap; transition: background .12s ease, color .12s ease; }
+    .tool-btn svg { width: 15px; height: 15px; }
+    .tool-btn:hover { background: var(--surface-2); color: var(--text); }
+    .recorder { display: flex; align-items: center; gap: 6px; min-width: max-content; margin-left: auto; padding-left: 8px; border-left: 1px solid var(--border); }
+    .record-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: var(--radius-sm); color: var(--accent-contrast); background: var(--accent); font-size: 12.5px; font-weight: 600; }
+    .record-btn:hover { background: var(--accent-press); }
+    .recorder.is-recording .record-btn { background: var(--danger); }
+    .rec-wave { display: none; width: 148px; height: 30px; }
+    .recorder.is-recording .rec-wave { display: block; }
+    .record-mode { height: 32px; }
+
+    .chart-controls { display: flex; gap: 8px; }
+    .chart-config { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .chart-config textarea { min-height: 64px; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); resize: vertical; outline: none; }
+    .chart-config textarea:focus { border-color: var(--accent); }
+    .chart-canvas-wrap { height: 180px; }
+    .table-controls { display: flex; gap: 8px; }
+    .mini-pill { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-2); background: var(--surface); font-size: 12px; font-weight: 600; }
+    .mini-pill:hover { color: var(--text); border-color: var(--border-strong); }
+    .mini-pill svg { width: 14px; height: 14px; }
+
+    .empty-state { display: grid; place-items: center; gap: 10px; min-height: 60vh; color: var(--muted); text-align: center; }
+    .empty-state .empty-icon { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 16px; background: var(--surface-2); color: var(--muted); }
+    .empty-state .empty-icon svg { width: 24px; height: 24px; }
+    .hidden { display: none !important; }
+
+    /* Tabulator theming */
+    .tabulator { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); font-family: var(--font); }
+    .tabulator, .tabulator-row, .tabulator .tabulator-header, .tabulator-row .tabulator-cell { color: var(--text); }
+    .tabulator .tabulator-header { border-bottom: 1px solid var(--border); background: var(--surface-2); font-weight: 600; }
+    .tabulator .tabulator-header .tabulator-col { background: transparent; border-right: 1px solid var(--border); }
+    .tabulator .tabulator-tableholder, .tabulator .tabulator-tableholder .tabulator-table { background: var(--surface); }
+    .tabulator-row { border-bottom: 1px solid var(--border); background: var(--surface); }
+    .tabulator-row.tabulator-row-even { background: var(--surface-2); }
+    .tabulator-row .tabulator-cell { padding: 8px 10px; border-right: 1px solid var(--border); }
+    .tabulator-row .tabulator-cell.tabulator-editing { border-color: var(--accent); }
+    .progress-cell { display: grid; grid-template-columns: minmax(40px,1fr) 34px; align-items: center; gap: 8px; color: var(--text-2); }
+    .progress-track { display: block; height: 6px; overflow: hidden; border-radius: 999px; background: var(--surface-hover); }
+    .progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+
+    /* ============ Overlays ============ */
+    .toast { position: fixed; left: 50%; bottom: 24px; z-index: 90; transform: translate(-50%, 16px); opacity: 0; max-width: min(360px, calc(100vw - 32px)); padding: 11px 16px; border-radius: var(--radius); background: var(--text); color: var(--bg); font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); transition: transform .2s ease, opacity .2s ease; pointer-events: none; }
+    .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+    .popover { position: fixed; z-index: 70; min-width: 180px; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-lg); }
+    .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 10px; border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-weight: 500; text-align: left; }
+    .menu-item svg { width: 15px; height: 15px; color: var(--text-2); }
+    .menu-item:hover { background: var(--surface-hover); }
+    .menu-item.danger { color: var(--danger); } .menu-item.danger svg { color: var(--danger); }
+    .menu-item.checked svg { color: var(--accent); }
+    .menu-heading { padding: 7px 10px 5px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+    .menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+
+    /* filter popover */
+    .filter-pop { min-width: 248px; padding: 12px; }
+    .filter-group { margin-bottom: 12px; }
+    .filter-group:last-child { margin-bottom: 0; }
+    .filter-group-label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    .seg button { min-height: 30px; padding: 0 8px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 600; }
+    .seg button.active { background: var(--accent); color: var(--accent-contrast); }
+    .chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+    .filter-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-2); background: var(--surface); font-size: 12px; font-weight: 550; }
+    .filter-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+    .filter-chip .tag-dot { width: 8px; height: 8px; }
+    .filter-clear { width: 100%; min-height: 34px; margin-top: 4px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 600; }
+    .filter-clear:hover { background: var(--surface-hover); }
+
+    /* auth gate */
+    .auth-gate { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+    .auth-card { width: min(400px, 100%); padding: 30px 28px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg); }
+    .auth-brand { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 22px; color: var(--text); font-size: 18px; font-weight: 650; }
+    .auth-brand .brand-mark { width: 28px; height: 28px; }
+    .auth-title { margin: 0 0 4px; color: var(--text); font-size: 21px; font-weight: 700; letter-spacing: -.01em; }
+    .auth-sub { margin: 0 0 20px; color: var(--text-2); font-size: 13.5px; }
+    .auth-field { width: 100%; min-height: 44px; margin-bottom: 11px; padding: 0 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: none; background: var(--surface-2); color: var(--text); font-size: 14.5px; }
+    .auth-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .auth-submit { width: 100%; min-height: 44px; margin-top: 4px; border-radius: var(--radius-sm); color: var(--accent-contrast); background: var(--accent); font-size: 14.5px; font-weight: 650; }
+    .auth-submit:hover { background: var(--accent-press); }
+    .auth-submit:disabled { opacity: .6; cursor: default; }
+    .auth-error { margin-bottom: 11px; padding: 9px 12px; border-radius: var(--radius-sm); background: rgba(229,72,77,.12); color: var(--danger); font-size: 12.5px; }
+    .auth-note { margin-bottom: 11px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--text); font-size: 12.5px; }
+    .auth-switch { margin-top: 18px; color: var(--text-2); font-size: 13px; text-align: center; }
+    .auth-switch button { color: var(--accent-press); font-weight: 650; }
+    .auth-local { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center; }
+    .auth-local button { color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+    .auth-local button:hover { color: var(--text); }
+    .settings-account { display: grid; gap: 8px; }
+    .settings-email { color: var(--text-2); font-size: 13px; }
+    .signout-btn { min-height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--danger); font-size: 13.5px; font-weight: 600; }
+    .signout-btn:hover { background: rgba(229,72,77,.08); border-color: var(--danger); }
+
+    /* modal */
+    .modal-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: rgba(8,10,14,.4); backdrop-filter: blur(3px); }
+    .app-modal { width: min(460px, 100%); max-height: 88vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg); }
+    .modal-body { display: grid; gap: 16px; padding: 22px; }
+    .modal-title { margin: 0; color: var(--text); font-size: 18px; font-weight: 650; }
+    .modal-copy { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+    .modal-field { width: 100%; min-height: 42px; padding: 0 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: none; background: var(--surface-2); color: var(--text); font-size: 14.5px; }
+    .modal-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 0 22px 22px; }
+    .modal-btn { min-height: 40px; padding: 0 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; }
+    .modal-btn:hover { background: var(--surface-hover); }
+    .modal-btn.primary { border: 0; color: var(--accent-contrast); background: var(--accent); }
+    .modal-btn.primary:hover { background: var(--accent-press); }
+
+    .field-label { display: block; margin-bottom: 7px; color: var(--text); font-size: 13px; font-weight: 600; }
+    .field-sub { margin-top: 5px; color: var(--muted); font-size: 11.5px; }
+    .settings-section { display: grid; gap: 8px; }
+    .theme-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .theme-seg button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; }
+    .theme-seg button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+    .theme-seg button svg { width: 15px; height: 15px; }
+    .swatch-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .swatch { width: 30px; height: 30px; border-radius: 999px; border: 2px solid transparent; cursor: pointer; position: relative; }
+    .swatch.active { border-color: var(--text); }
+    .swatch.active::after { content: ""; position: absolute; inset: 0; margin: auto; width: 8px; height: 8px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); }
+
+    .tag-manage-list { display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+    .tag-manage-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    .tag-manage-colors { display: inline-flex; gap: 4px; }
+    .tag-color-dot { width: 16px; height: 16px; border-radius: 999px; border: 2px solid transparent; cursor: pointer; }
+    .tag-color-dot.active { border-color: var(--text); }
+    .tag-manage-del { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; color: var(--muted); }
+    .tag-manage-del:hover { color: var(--danger); background: var(--surface-hover); }
+
+    /* ============ Responsive ============ */
+    @media (max-width: 1080px) {
+      .app { grid-template-columns: 240px minmax(0,1fr); }
+      .note-list { display: none; }
+      .note-list.mobile-open { position: fixed; inset: 0 0 0 240px; z-index: 20; display: flex; box-shadow: var(--shadow-lg); }
+      .mobile-only { display: inline-grid; }
+    }
+    @media (max-width: 720px) {
+      html, body { height: auto; overflow: auto; }
+      .app { height: auto; min-height: 100vh; grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+      .folder-list { flex-direction: row; flex-wrap: wrap; }
+      .folder-item { width: auto; }
+      .note-list, .note-list.mobile-open { position: static; inset: auto; display: flex; border-right: 0; border-bottom: 1px solid var(--border); box-shadow: none; }
+      .editor { padding: 0 16px 56px; }
+      .topbar { padding: 0 16px; }
+      .block-menu { opacity: 1; }
+      .block-add-gutter { position: static; opacity: 1; margin-bottom: 6px; }
+      .block { padding-left: 0; }
+      .insert-bar { flex-wrap: nowrap; }
+      .insert-bar .tool-btn span, .record-btn span { display: none; }
+      .insert-bar .tool-btn { min-height: 36px; padding: 0 9px; }
+      .recorder { margin-left: auto; padding-left: 8px; border-left: 1px solid var(--border); border-top: 0; }
+      .chart-config { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand-row">
+        <span class="brand-word"><span class="brand-mark"><i data-lucide="notebook-pen"></i></span>Note Buddy</span>
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle theme"><i data-lucide="moon"></i></button>
+      </div>
+
+      <button class="new-note-btn" id="newNoteBtn"><i data-lucide="plus"></i><span>New Note</span></button>
+      <div class="tool-row">
+        <button class="icon-btn" id="newFolderBtn" title="New folder"><i data-lucide="folder-plus"></i></button>
+        <button class="icon-btn" id="importBtn" title="Import backup"><i data-lucide="upload"></i></button>
+        <button class="icon-btn" id="exportJsonBtn" title="Backup (JSON)"><i data-lucide="database-backup"></i></button>
+        <button class="icon-btn" id="exportTxtBtn" title="Export note (TXT)"><i data-lucide="file-down"></i></button>
+      </div>
+
+      <div class="filter-active-banner" id="filterBanner">
+        <i data-lucide="filter"></i><span id="filterBannerText">Filtered</span>
+        <button id="clearFilterBanner">Clear</button>
+      </div>
+
+      <div class="section-head">
+        <span class="section-label">Folders</span>
+        <button class="mini-add" data-new-folder title="New folder"><i data-lucide="plus"></i></button>
+      </div>
+      <div class="folder-list" id="folderList"></div>
+
+      <div class="section-head">
+        <span class="section-label">Tags</span>
+        <button class="mini-add" id="addTagSidebar" title="New tag"><i data-lucide="plus"></i></button>
+      </div>
+      <div class="tag-list" id="tagList"></div>
+
+      <div class="spacer"></div>
+      <div class="profile-card">
+        <div class="avatar" id="profileAvatar">DD</div>
+        <div>
+          <div class="profile-name" id="profileName">David</div>
+          <div class="profile-sub" id="profileSub">Note Buddy</div>
+        </div>
+        <button class="icon-btn" id="settingsBtn" title="Settings" style="background:transparent;"><i data-lucide="settings"></i></button>
+      </div>
+    </aside>
+
+    <section class="note-list" id="noteListPane">
+      <div class="list-head">
+        <button class="list-title" id="folderSwitcher"><span id="currentFolderName">All Notes</span><i data-lucide="chevron-down"></i></button>
+        <div class="list-actions">
+          <button class="ghost-btn mobile-only" id="closeNotesBtn" title="Close"><i data-lucide="x"></i></button>
+          <button class="ghost-btn" id="filterBtn" title="Filter & sort"><i data-lucide="sliders-horizontal"></i></button>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <i data-lucide="search"></i>
+        <input class="search-input" id="searchInput" placeholder="Search notes">
+      </div>
+      <div class="notes-scroll" id="notesList"></div>
+    </section>
+
+    <main class="editor-shell">
+      <div class="topbar">
+        <div class="row">
+          <button class="ghost-btn mobile-only" id="openNotesBtn" title="Notes"><i data-lucide="panel-left-open"></i></button>
+          <span class="move-wrap"><i data-lucide="folder"></i><select class="select" id="moveFolderSelect" title="Move note to folder"></select></span>
+        </div>
+        <div class="editor-actions">
+          <span class="save-state-inline" id="saveState"></span>
+          <button class="ghost-btn" id="pinBtn" title="Pin note"><i data-lucide="pin"></i></button>
+          <button class="ghost-btn" id="shareBtn" title="Copy note as text"><i data-lucide="share"></i></button>
+          <button class="ghost-btn" id="noteMenuBtn" title="More"><i data-lucide="ellipsis"></i></button>
+        </div>
+      </div>
+
+      <section class="editor" id="editor">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon"><i data-lucide="notebook-pen"></i></div>
+          <div>Select a note, or create a new one to begin.</div>
+        </div>
+        <div id="noteSurface" class="hidden">
+          <input class="note-title-input" id="titleInput" placeholder="Untitled">
+          <div class="note-tags-edit" id="noteTagsEdit"></div>
+          <div class="blocks" id="blocks"></div>
+          <div class="insert-bar">
+            <button class="tool-btn" data-add-block="paragraph" title="Text"><i data-lucide="type"></i><span>Text</span></button>
+            <button class="tool-btn" data-add-block="heading" title="Heading"><i data-lucide="heading"></i><span>Heading</span></button>
+            <button class="tool-btn" data-add-block="checklist" title="Checklist"><i data-lucide="square-check-big"></i><span>Check</span></button>
+            <button class="tool-btn" data-add-block="image" title="Photo"><i data-lucide="image"></i><span>Photo</span></button>
+            <button class="tool-btn" data-add-block="table" title="Table"><i data-lucide="table"></i><span>Table</span></button>
+            <button class="tool-btn" data-add-block="chart" title="Chart"><i data-lucide="chart-column"></i><span>Chart</span></button>
+            <button class="tool-btn" data-add-block="file" title="Upload a file, document, photo, audio or video"><i data-lucide="upload"></i><span>Upload</span></button>
+            <div class="recorder" id="recorder">
+              <canvas class="rec-wave" id="recWave" width="148" height="30"></canvas>
+              <button class="record-btn" id="recordBtn"><i data-lucide="mic"></i><span>Record</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <input type="file" id="imageInput" accept="image/*,.heic,.heif" multiple class="hidden">
+  <input type="file" id="mediaInput" accept="audio/*,video/*" multiple class="hidden">
+  <input type="file" id="attachInput" multiple class="hidden">
+
+  <div class="lightbox hidden" id="lightbox">
+    <button class="lb-close" id="lbClose" aria-label="Close"><i data-lucide="x"></i></button>
+    <button class="lb-nav lb-prev" id="lbPrev" aria-label="Previous"><i data-lucide="chevron-left"></i></button>
+    <img class="lb-img" id="lbImg" alt="">
+    <button class="lb-nav lb-next" id="lbNext" aria-label="Next"><i data-lucide="chevron-right"></i></button>
+    <div class="lb-counter" id="lbCounter"></div>
+  </div>
+  <input type="file" id="importInput" accept="application/json,.json" class="hidden">
+
+  <div class="popover hidden" id="popover"></div>
+
+  <div class="modal-backdrop hidden" id="inputModal" aria-modal="true" role="dialog">
+    <form class="app-modal" id="inputModalForm">
+      <div class="modal-body">
+        <h2 class="modal-title" id="inputModalTitle">Rename</h2>
+        <p class="modal-copy" id="inputModalCopy">Choose a clear name.</p>
+        <input class="modal-field" id="inputModalField" autocomplete="off">
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn" type="button" id="inputModalCancel">Cancel</button>
+        <button class="modal-btn primary" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop hidden" id="settingsModal" aria-modal="true" role="dialog">
+    <div class="app-modal">
+      <div class="modal-body">
+        <h2 class="modal-title">Settings</h2>
+        <div class="settings-section">
+          <label class="field-label" for="settingsName">Display name</label>
+          <input class="modal-field" id="settingsName" placeholder="Your name" autocomplete="off">
+        </div>
+        <div class="settings-section">
+          <span class="field-label">Theme</span>
+          <div class="theme-seg" id="themeSeg">
+            <button data-theme-choice="light"><i data-lucide="sun"></i>Light</button>
+            <button data-theme-choice="dark"><i data-lucide="moon"></i>Dark</button>
+            <button data-theme-choice="system"><i data-lucide="monitor"></i>System</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <span class="field-label">Accent color</span>
+          <div class="swatch-row" id="accentRow">
+            <button class="swatch" data-accent-choice="orange" style="background:#f97316" title="Orange"></button>
+            <button class="swatch" data-accent-choice="blue" style="background:#3b82f6" title="Blue"></button>
+            <button class="swatch" data-accent-choice="violet" style="background:#7c5cff" title="Violet"></button>
+            <button class="swatch" data-accent-choice="green" style="background:#16a34a" title="Green"></button>
+            <button class="swatch" data-accent-choice="amber" style="background:#e08600" title="Amber"></button>
+            <button class="swatch" data-accent-choice="rose" style="background:#e5484d" title="Rose"></button>
+            <button class="swatch" data-accent-choice="teal" style="background:#0d9488" title="Teal"></button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <span class="field-label">Manage tags</span>
+          <div class="tag-manage-list" id="tagManageList"></div>
+          <button class="modal-btn" id="settingsAddTag" style="min-height:36px;"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px;"></i> New tag</button>
+        </div>
+        <div class="settings-section settings-account hidden" id="settingsAccount">
+          <span class="field-label">Account</span>
+          <div class="settings-email" id="settingsEmail"></div>
+          <div class="settings-email" id="settingsSyncState" style="font-size:11.5px;"></div>
+          <button class="signout-btn" id="signOutBtn">Sign out</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn primary" id="settingsDone">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-gate hidden" id="authGate">
+    <div class="auth-card">
+      <div class="auth-brand"><span class="brand-mark"><i data-lucide="notebook-pen"></i></span>Note Buddy</div>
+      <h1 class="auth-title" id="authTitle">Welcome back</h1>
+      <p class="auth-sub" id="authSub">Log in to access your notes on any device.</p>
+      <form id="authForm" autocomplete="on">
+        <div class="auth-error hidden" id="authError"></div>
+        <div class="auth-note hidden" id="authNote"></div>
+        <input class="auth-field" type="email" id="authEmail" placeholder="Email" autocomplete="email" required>
+        <input class="auth-field" type="password" id="authPassword" placeholder="Password" autocomplete="current-password" required minlength="6">
+        <input class="auth-field hidden" type="password" id="authPassword2" placeholder="Repeat password" autocomplete="new-password" minlength="6">
+        <button class="auth-submit" type="submit" id="authSubmit">Log in</button>
+      </form>
+      <div class="auth-switch"><span id="authSwitchText">New to Note Buddy?</span> <button id="authSwitchBtn" type="button">Create an account</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ============================================================
+       SUPABASE CONFIG — paste your project URL + anon key here.
+       Until you do, Note Buddy runs in local-only mode (no login).
+       Get these from Supabase → Project Settings → API.
+       ============================================================ */
+    const SUPABASE_URL = "https://rybfbelahsxjttjxdvih.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_z2RdoPXLmqYyjcM8l1uiMQ_qnBy1qC8";
+
+    const cloudConfigured = SUPABASE_URL.startsWith("http") && !/YOUR-PROJECT/.test(SUPABASE_URL) && !/YOUR-ANON-KEY/.test(SUPABASE_ANON_KEY);
+    let sb = null;            // supabase client
+    let currentUser = null;   // logged-in user
+    let syncReady = false;    // true once initial pull/seed done
+    let syncTimer = null;
+    const cloudReady = () => !!(sb && currentUser);
+
+    const db = new Dexie("NoteBuddyV1");
+    db.version(1).stores({
+      folders: "id, name, updatedAt",
+      notes: "id, folderId, title, updatedAt, createdAt",
+      attachments: "id, noteId, blockId, type, createdAt"
+    });
+    db.version(2).stores({
+      folders: "id, name, updatedAt",
+      notes: "id, folderId, title, updatedAt, createdAt",
+      attachments: "id, noteId, blockId, type, createdAt",
+      tags: "id, name, createdAt"
+    }).upgrade((tx) => tx.table("notes").toCollection().modify((note) => {
+      if (!Array.isArray(note.tags)) note.tags = [];
+    }));
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+    const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const now = () => new Date().toISOString();
+    const escapeHtml = (value = "") => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+
+    const TAG_COLORS = ["slate", "red", "amber", "green", "blue", "violet", "teal", "pink"];
+
+    const prefs = {
+      get theme() { return localStorage.getItem("nb_theme") || "system"; },
+      set theme(v) { localStorage.setItem("nb_theme", v); },
+      get accent() { return localStorage.getItem("nb_accent") || "orange"; },
+      set accent(v) { localStorage.setItem("nb_accent", v); },
+      get name() { return localStorage.getItem("nb_name") || "David"; },
+      set name(v) { localStorage.setItem("nb_name", v); },
+      get sort() { return localStorage.getItem("nb_sort") || "updated"; },
+      set sort(v) { localStorage.setItem("nb_sort", v); }
+    };
+
+    const state = {
+      folders: [], notes: [], tags: [],
+      selectedFolderId: "all",
+      selectedNoteId: null,
+      selectedNote: null,
+      search: "",
+      filterTagIds: new Set(),
+      filterTypes: new Set(),
+      sortMode: prefs.sort,
+      dragCandidate: null,
+      suppressNextClick: false,
+      folderPointerDrag: null,
+      notePointerDrag: null,
+      blockPointerDrag: null,
+      noteTitleTimers: new Map(),
+      saveTimer: null,
+      recording: null,
+      chartInstances: new Map(),
+      tableInstances: new Map()
+    };
+
+    const els = {
+      folderList: $("#folderList"), tagList: $("#tagList"), notesList: $("#notesList"),
+      currentFolderName: $("#currentFolderName"), searchInput: $("#searchInput"),
+      emptyState: $("#emptyState"), noteSurface: $("#noteSurface"), titleInput: $("#titleInput"),
+      noteTagsEdit: $("#noteTagsEdit"), blocks: $("#blocks"), moveFolderSelect: $("#moveFolderSelect"),
+      saveState: $("#saveState"), recorder: $("#recorder"), recordBtn: $("#recordBtn"),
+      imageInput: $("#imageInput"), mediaInput: $("#mediaInput"), attachInput: $("#attachInput"), importInput: $("#importInput"), popover: $("#popover"),
+      inputModal: $("#inputModal"), inputModalForm: $("#inputModalForm"), inputModalTitle: $("#inputModalTitle"),
+      inputModalCopy: $("#inputModalCopy"), inputModalField: $("#inputModalField"), inputModalCancel: $("#inputModalCancel"),
+      toast: $("#toast"), noteListPane: $("#noteListPane"), filterBtn: $("#filterBtn"),
+      filterBanner: $("#filterBanner"), filterBannerText: $("#filterBannerText"),
+      settingsModal: $("#settingsModal"), profileName: $("#profileName"), profileAvatar: $("#profileAvatar"),
+      pinBtn: $("#pinBtn"), themeToggle: $("#themeToggle")
+    };
+
+    /* ============ Theme ============ */
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    function applyTheme() {
+      const theme = prefs.theme;
+      const dark = theme === "dark" || (theme === "system" && mql.matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      const icon = els.themeToggle.querySelector("[data-lucide]");
+      if (icon) { icon.setAttribute("data-lucide", dark ? "sun" : "moon"); iconRefresh(); }
+    }
+    function applyAccent() { document.documentElement.dataset.accent = prefs.accent; }
+    mql.addEventListener("change", () => { if (prefs.theme === "system") applyTheme(); });
+
+    function iconRefresh() { if (window.lucide) lucide.createIcons(); }
+
+    function toast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(els.toast._timer);
+      els.toast._timer = setTimeout(() => els.toast.classList.remove("show"), 2400);
+    }
+
+    function askForText({ title, copy = "", value = "", placeholder = "" }) {
+      closePopover();
+      els.inputModalTitle.textContent = title;
+      els.inputModalCopy.textContent = copy;
+      els.inputModalCopy.classList.toggle("hidden", !copy);
+      els.inputModalField.value = value;
+      els.inputModalField.placeholder = placeholder;
+      els.inputModal.classList.remove("hidden");
+      requestAnimationFrame(() => { els.inputModalField.focus(); els.inputModalField.select(); });
+      return new Promise((resolve) => {
+        const cleanup = (result) => {
+          els.inputModal.classList.add("hidden");
+          els.inputModalForm.removeEventListener("submit", onSubmit);
+          els.inputModalCancel.removeEventListener("click", onCancel);
+          els.inputModal.removeEventListener("click", onBackdrop);
+          document.removeEventListener("keydown", onKeydown);
+          resolve(result);
+        };
+        const onSubmit = (e) => { e.preventDefault(); cleanup(els.inputModalField.value.trim()); };
+        const onCancel = () => cleanup(null);
+        const onBackdrop = (e) => { if (e.target === els.inputModal) cleanup(null); };
+        const onKeydown = (e) => { if (e.key === "Escape") cleanup(null); };
+        els.inputModalForm.addEventListener("submit", onSubmit);
+        els.inputModalCancel.addEventListener("click", onCancel);
+        els.inputModal.addEventListener("click", onBackdrop);
+        document.addEventListener("keydown", onKeydown);
+      });
+    }
+
+    function setSaveState(text) {
+      if (text === "Saving...") { els.saveState.textContent = "Saving…"; return; }
+      const stamp = state.selectedNote?.updatedAt || now();
+      els.saveState.textContent = `Edited ${formatTime(stamp)}`;
+    }
+
+    function formatTime(iso) {
+      const date = new Date(iso);
+      const today = new Date();
+      const sameDay = date.toDateString() === today.toDateString();
+      if (sameDay) return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+      return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+    }
+
+    function stripTags(value) { const div = document.createElement("div"); div.innerHTML = value || ""; return div.textContent || div.innerText || ""; }
+
+    function firstText(note) {
+      if (!note) return "";
+      for (const b of (note.blocks || [])) {
+        if (!b.data) continue;
+        const direct = b.data.text || b.data.caption || b.data.title;
+        if (direct && String(direct).trim()) return stripTags(direct);
+        if (Array.isArray(b.data.items)) { for (const it of b.data.items) if (it.kind === "text" && stripTags(it.text || "").trim()) return stripTags(it.text); }
+      }
+      return "No additional text";
+    }
+
+    function noteContentTypes(note) {
+      const types = new Set();
+      for (const block of note.blocks || []) {
+        if (["paragraph", "heading"].includes(block.type)) types.add("text");
+        if (block.type === "checklist") types.add("checklist");
+        if (block.type === "image") types.add("image");
+        if (block.type === "audio" || block.type === "session" || block.type === "video") types.add("audio");
+        if (block.type === "table") types.add("table");
+        if (block.type === "chart") types.add("chart");
+        if (Array.isArray(block.data.images) && block.data.images.length) types.add("image");
+        for (const it of (block.data.items || [])) { if (it.kind === "audio" || it.kind === "video") types.add("audio"); if (it.kind === "text" && stripTags(it.text || "").trim()) types.add("text"); }
+      }
+      return types;
+    }
+
+    /* ============ Tags ============ */
+    function tagById(id) { return state.tags.find((t) => t.id === id); }
+    function noteTagObjects(note) { return (note.tags || []).map(tagById).filter(Boolean); }
+
+    function tagChipHtml(tag, removable = false, blockData) {
+      return `<span class="tag tg-${tag.color}" data-tag-chip="${tag.id}">
+        <span class="tag-name">${escapeHtml(tag.name)}</span>
+        ${removable ? `<span class="x" data-remove-tag="${tag.id}" aria-label="Remove tag"><i data-lucide="x"></i></span>` : ""}
+      </span>`;
+    }
+
+    async function createTag(presetName) {
+      const name = presetName || await askForText({ title: "New tag", copy: "Name your tag.", value: "", placeholder: "Tag name" });
+      if (!name) return null;
+      const trimmed = name.trim();
+      if (!trimmed) return null;
+      if (state.tags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) { toast("Tag already exists"); return null; }
+      const color = TAG_COLORS[state.tags.length % TAG_COLORS.length];
+      const tag = { id: uid(), name: trimmed, color, createdAt: now() };
+      await db.tags.add(tag);
+      state.tags.push(tag);
+      scheduleSync();
+      return tag;
+    }
+
+    async function renameTag(tagId) {
+      const tag = tagById(tagId);
+      if (!tag) return;
+      const name = await askForText({ title: "Rename tag", value: tag.name, placeholder: "Tag name" });
+      if (!name) return;
+      tag.name = name.trim();
+      await db.tags.put(tag);
+      await reloadAndRender();
+    }
+
+    async function setTagColor(tagId, color) {
+      const tag = tagById(tagId);
+      if (!tag) return;
+      tag.color = color;
+      await db.tags.put(tag);
+      await reloadAndRender();
+    }
+
+    async function deleteTag(tagId) {
+      await db.tags.delete(tagId);
+      state.filterTagIds.delete(tagId);
+      await db.notes.toCollection().modify((note) => {
+        if (Array.isArray(note.tags) && note.tags.includes(tagId)) note.tags = note.tags.filter((id) => id !== tagId);
+      });
+      await reloadAndRender();
+      toast("Tag deleted");
+    }
+
+    async function toggleNoteTag(noteId, tagId) {
+      const note = state.notes.find((n) => n.id === noteId);
+      if (!note) return;
+      if (!Array.isArray(note.tags)) note.tags = [];
+      if (note.tags.includes(tagId)) note.tags = note.tags.filter((id) => id !== tagId);
+      else note.tags.push(tagId);
+      note.updatedAt = now();
+      await db.notes.put(note);
+      if (state.selectedNote?.id === noteId) state.selectedNote.tags = note.tags;
+      renderTags(); renderNotes(); renderNoteTagsEdit();
+      scheduleSync();
+    }
+
+    function toggleTagFilter(tagId) {
+      if (state.filterTagIds.has(tagId)) state.filterTagIds.delete(tagId);
+      else state.filterTagIds.add(tagId);
+      renderTags(); renderNotes(); renderFilterState();
+    }
+
+    /* ============ Filtering & sorting ============ */
+    function noteMatchesSearch(note) {
+      if (!state.search) return true;
+      const haystack = [note.title, ...(note.blocks || []).map((b) => JSON.stringify(b.data || {})), ...noteTagObjects(note).map((t) => t.name)].join(" ").toLowerCase();
+      return haystack.includes(state.search.toLowerCase());
+    }
+    function noteMatchesTagFilter(note) {
+      if (!state.filterTagIds.size) return true;
+      return [...state.filterTagIds].every((id) => (note.tags || []).includes(id));
+    }
+    function noteMatchesTypeFilter(note) {
+      if (!state.filterTypes.size) return true;
+      const types = noteContentTypes(note);
+      return [...state.filterTypes].every((t) => types.has(t));
+    }
+
+    function visibleNotes() {
+      return state.notes
+        .filter((note) => state.selectedFolderId === "all" || note.folderId === state.selectedFolderId)
+        .filter(noteMatchesSearch).filter(noteMatchesTagFilter).filter(noteMatchesTypeFilter)
+        .sort(compareNotes);
+    }
+
+    function compareNotes(a, b) {
+      if (!!a.pinnedAt !== !!b.pinnedAt) return a.pinnedAt ? -1 : 1;
+      if (state.sortMode === "title") return (a.title || "").localeCompare(b.title || "");
+      if (state.sortMode === "created") return new Date(b.createdAt) - new Date(a.createdAt);
+      if (state.sortMode === "manual") {
+        const ao = Number.isFinite(a.sortOrder) ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+        const bo = Number.isFinite(b.sortOrder) ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+        if (ao !== bo) return ao - bo;
+      }
+      return new Date(b.updatedAt) - new Date(a.updatedAt);
+    }
+
+    async function ensureNoteSortOrder() {
+      const missing = state.notes.filter((note) => !Number.isFinite(note.sortOrder));
+      if (!missing.length) return;
+      const ordered = [...state.notes].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      await Promise.all(ordered.map((note, index) => db.notes.update(note.id, { sortOrder: index })));
+      state.notes = await db.notes.orderBy("updatedAt").reverse().toArray();
+    }
+
+    function defaultFolderId() { return state.folders.find((f) => f.name === "Work")?.id || state.folders[0]?.id; }
+    function naturalFolderOrder(name) { const i = ["Work", "Personal", "Ideas", "Archive"].indexOf(name); return i === -1 ? 99 : i; }
+    function sortFolders(folders = state.folders) {
+      return [...folders].sort((a, b) => {
+        if (!!a.pinnedAt !== !!b.pinnedAt) return a.pinnedAt ? -1 : 1;
+        const ao = Number.isFinite(a.sortOrder) ? a.sortOrder : naturalFolderOrder(a.name);
+        const bo = Number.isFinite(b.sortOrder) ? b.sortOrder : naturalFolderOrder(b.name);
+        if (ao !== bo) return ao - bo;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    async function ensureFolderSortOrder() {
+      const missing = state.folders.filter((f) => !Number.isFinite(f.sortOrder));
+      if (!missing.length) return;
+      const ordered = sortFolders(state.folders);
+      await Promise.all(ordered.map((f, i) => db.folders.update(f.id, { sortOrder: i })));
+      state.folders = await db.folders.orderBy("updatedAt").reverse().toArray();
+    }
+
+    /* ============ Seed data ============ */
+    function starterNote(title, text, folderId, minutesAgo, tags = []) {
+      const stamp = new Date(Date.now() - minutesAgo * 60000).toISOString();
+      return { id: uid(), folderId, title, tags, blocks: [{ id: uid(), type: "paragraph", data: { text } }], createdAt: stamp, updatedAt: stamp };
+    }
+
+    async function reloadAndRender() {
+      state.folders = await db.folders.orderBy("updatedAt").reverse().toArray();
+      state.notes = await db.notes.orderBy("updatedAt").reverse().toArray();
+      state.tags = await db.tags.orderBy("createdAt").toArray();
+      state.selectedNote = state.notes.find((n) => n.id === state.selectedNoteId) || null;
+      renderAll();
+      scheduleSync();
+    }
+
+    async function loadAll() {
+      state.folders = await db.folders.orderBy("updatedAt").reverse().toArray();
+      state.notes = await db.notes.orderBy("updatedAt").reverse().toArray();
+      state.tags = await db.tags.orderBy("createdAt").toArray();
+
+      if (!state.folders.length) {
+        for (const [sortOrder, name] of ["Work", "Personal", "Ideas", "Archive"].entries())
+          await db.folders.add({ id: uid(), name, sortOrder, createdAt: now(), updatedAt: now() });
+      } else if (!state.folders.some((f) => f.name === "Archive")) {
+        await db.folders.add({ id: uid(), name: "Archive", sortOrder: state.folders.length, createdAt: now(), updatedAt: now() });
+      }
+      state.folders = await db.folders.orderBy("updatedAt").reverse().toArray();
+      await ensureFolderSortOrder();
+      await ensureNoteSortOrder();
+
+      if (!state.tags.length) {
+        const seedTags = [
+          { id: uid(), name: "Urgent", color: "red", createdAt: now() },
+          { id: uid(), name: "Idea", color: "blue", createdAt: now() },
+          { id: uid(), name: "Meeting", color: "amber", createdAt: now() },
+          { id: uid(), name: "Project Phoenix", color: "green", createdAt: now() }
+        ];
+        await db.tags.bulkAdd(seedTags);
+        state.tags = await db.tags.orderBy("createdAt").toArray();
+      }
+
+      if (!state.notes.length) {
+        const workId = defaultFolderId();
+        const t = Object.fromEntries(state.tags.map((tag) => [tag.name, tag.id]));
+        await createProjectPhoenixNote(workId, false, [t["Meeting"], t["Project Phoenix"]].filter(Boolean));
+        await db.notes.bulkAdd([
+          starterNote("Ideas for New Features", "Quick capture of potential features for Note Buddy.", workId, 12, [t["Idea"]].filter(Boolean)),
+          starterNote("Weekly Planning", "Plan for the week and prioritize tasks.", workId, 24, [t["Urgent"]].filter(Boolean)),
+          starterNote("Client Feedback Summary", "Key points from the client feedback call.", workId, 36, [t["Meeting"]].filter(Boolean)),
+          starterNote("Shopping List", "Groceries and household items.", workId, 48, [])
+        ]);
+        state.notes = await db.notes.orderBy("updatedAt").reverse().toArray();
+      }
+
+      await migrateImageBlocksToItems();
+      state.selectedNoteId = state.selectedNoteId || state.notes[0]?.id || null;
+      state.selectedNote = state.notes.find((n) => n.id === state.selectedNoteId) || null;
+      renderAll();
+      scheduleSync();
+    }
+
+    // Reorganize legacy image blocks ({images, caption, files}) into the ordered items model (same content, same order).
+    async function migrateImageBlocksToItems() {
+      let changed = false;
+      for (const note of state.notes) {
+        let touched = false;
+        for (const b of (note.blocks || [])) { if (b.type === "image" && !Array.isArray(b.data.items)) { ensureItems(b); touched = true; } }
+        if (touched) { await db.notes.put(note); changed = true; }
+      }
+      if (changed) state.notes = await db.notes.orderBy("updatedAt").reverse().toArray();
+    }
+
+    // Convert any legacy in-caption file chips (block.data.files) into standalone file blocks.
+    async function migrateLegacyFiles() {
+      let changed = false;
+      for (const note of state.notes) {
+        if (!(note.blocks || []).some((b) => Array.isArray(b.data.files) && b.data.files.length)) continue;
+        const next = [];
+        for (const b of note.blocks) {
+          const files = Array.isArray(b.data.files) ? b.data.files : [];
+          delete b.data.files;
+          next.push(b);
+          for (const f of files) next.push({ id: uid(), type: "file", data: { createdAt: now(), attachmentId: f.attachmentId, name: f.name, mimeType: f.mimeType || "", size: f.size || 0 } });
+        }
+        note.blocks = next;
+        await db.notes.put(note);
+        changed = true;
+      }
+      if (changed) state.notes = await db.notes.orderBy("updatedAt").reverse().toArray();
+    }
+
+    /* ============ Rendering ============ */
+    function renderAll() { renderFolders(); renderTags(); renderNotes(); renderFolderSelect(); renderEditor(); renderFilterState(); renderProfile(); iconRefresh(); }
+
+    function renderProfile() {
+      els.profileName.textContent = prefs.name;
+      const initials = prefs.name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "NB";
+      els.profileAvatar.textContent = initials;
+    }
+
+    function renderFolders() {
+      const counts = state.notes.reduce((acc, note) => { acc[note.folderId] = (acc[note.folderId] || 0) + 1; return acc; }, {});
+      const allActive = state.selectedFolderId === "all" ? " active" : "";
+      const allRow = `<button class="folder-item${allActive}" data-folder-id="all" style="cursor:pointer;">
+          <i data-lucide="layers"></i><span class="folder-name">All Notes</span>
+          <span class="count">${state.notes.length}</span><span class="folder-actions placeholder"></span>
+        </button>`;
+      els.folderList.innerHTML = allRow + sortFolders(state.folders).map((f) => folderButton(f, counts[f.id] || 0)).join("");
+    }
+
+    function folderButton(folder, count) {
+      const active = folder.id === state.selectedFolderId ? " active" : "";
+      const canDelete = folder.name !== "Archive";
+      const pinned = !!folder.pinnedAt;
+      return `<div class="folder-item${active}" data-folder-id="${folder.id}">
+          <i data-lucide="${pinned ? "folder-check" : "folder"}"></i>
+          <span class="folder-name">${escapeHtml(folder.name)}</span>
+          <span class="count has-actions">${count}</span>
+          <span class="folder-actions">
+            <button class="folder-icon-btn folder-pin${pinned ? " is-pinned" : ""}" data-pin-folder="${folder.id}" aria-label="Pin"><i data-lucide="pin"></i></button>
+            ${canDelete ? `<button class="folder-icon-btn" data-rename-folder="${folder.id}" aria-label="Rename"><i data-lucide="pencil"></i></button>` : ""}
+            ${canDelete ? `<button class="folder-icon-btn folder-delete" data-delete-folder="${folder.id}" aria-label="Delete"><i data-lucide="trash-2"></i></button>` : ""}
+          </span>
+        </div>`;
+    }
+
+    function renderTags() {
+      if (!state.tags.length) { els.tagList.innerHTML = `<div class="tag-empty">No tags yet. Create one with +</div>`; return; }
+      const counts = state.notes.reduce((acc, note) => { (note.tags || []).forEach((id) => acc[id] = (acc[id] || 0) + 1); return acc; }, {});
+      els.tagList.innerHTML = state.tags.map((tag) => {
+        const active = state.filterTagIds.has(tag.id) ? " active" : "";
+        return `<div class="tag-row${active}" data-tag-filter="${tag.id}">
+          <span class="tag-dot dot-${tag.color}"></span>
+          <span class="tag-row-name">${escapeHtml(tag.name)}</span>
+          <span class="tag-row-count">${counts[tag.id] || 0}</span>
+          <span class="tag-row-actions">
+            <button class="folder-icon-btn" data-rename-tag="${tag.id}" aria-label="Rename tag"><i data-lucide="pencil"></i></button>
+            <button class="folder-icon-btn folder-delete" data-delete-tag="${tag.id}" aria-label="Delete tag"><i data-lucide="trash-2"></i></button>
+          </span>
+        </div>`;
+      }).join("");
+    }
+
+    function renderNotes() {
+      const folderName = state.selectedFolderId === "all" ? "All Notes" : (state.folders.find((f) => f.id === state.selectedFolderId)?.name || "Notes");
+      els.currentFolderName.textContent = folderName;
+      const notes = visibleNotes();
+      if (!notes.length) {
+        const filtered = state.search || state.filterTagIds.size || state.filterTypes.size;
+        els.notesList.innerHTML = `<div class="tag-empty" style="text-align:center;padding:32px 12px;">${filtered ? "No notes match your filters." : "No notes here yet."}</div>`;
+        return;
+      }
+      els.notesList.innerHTML = notes.map((note) => {
+        const tags = noteTagObjects(note).slice(0, 3);
+        return `<article class="note-item${note.id === state.selectedNoteId ? " active" : ""}" data-note-id="${note.id}" tabindex="0" role="button">
+          <div class="note-item-top">
+            <span class="note-title" contenteditable="true" data-note-title="${note.id}" spellcheck="false">${escapeHtml(note.title || "Untitled")}</span>
+            ${note.pinnedAt ? `<i class="note-pin-badge" data-lucide="pin"></i>` : ""}
+          </div>
+          <span class="note-preview">${escapeHtml(firstText(note))}</span>
+          <div class="note-meta-row">
+            <span class="note-time">${formatTime(note.updatedAt)}</span>
+            ${tags.length ? `<span class="note-tags">${tags.map((t) => tagChipHtml(t)).join("")}</span>` : ""}
+          </div>
+          <button class="note-menu-trigger" data-note-menu="${note.id}" aria-label="Note actions"><i data-lucide="ellipsis"></i></button>
+        </article>`;
+      }).join("");
+    }
+
+    function renderNoteTagsEdit() {
+      if (!state.selectedNote) return;
+      const tags = noteTagObjects(state.selectedNote);
+      els.noteTagsEdit.innerHTML = tags.map((t) => tagChipHtml(t, true)).join("") +
+        `<button class="add-tag-btn" id="addNoteTagBtn"><i data-lucide="tag"></i><span>${tags.length ? "Add tag" : "Add tags"}</span></button>`;
+      iconRefresh();
+    }
+
+    function renderFolderSelect() {
+      els.moveFolderSelect.innerHTML = sortFolders(state.folders).map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
+      if (state.selectedNote) els.moveFolderSelect.value = state.selectedNote.folderId;
+    }
+
+    function renderFilterState() {
+      const count = state.filterTagIds.size + state.filterTypes.size;
+      els.filterBtn.classList.toggle("active", count > 0);
+      els.filterBtn.innerHTML = `<i data-lucide="sliders-horizontal"></i>${count ? `<span class="dot-badge"></span>` : ""}`;
+      const parts = [];
+      if (state.filterTagIds.size) parts.push(`${state.filterTagIds.size} tag${state.filterTagIds.size > 1 ? "s" : ""}`);
+      if (state.filterTypes.size) parts.push(`${state.filterTypes.size} type${state.filterTypes.size > 1 ? "s" : ""}`);
+      els.filterBanner.classList.toggle("show", count > 0);
+      els.filterBannerText.textContent = parts.length ? `Filtering by ${parts.join(" + ")}` : "Filtered";
+      iconRefresh();
+    }
+
+    function renderEditor() {
+      state.chartInstances.forEach((c) => c.destroy()); state.chartInstances.clear(); state.tableInstances.clear();
+      if (!state.selectedNote) {
+        els.emptyState.classList.remove("hidden");
+        els.noteSurface.classList.add("hidden");
+        els.saveState.textContent = "";
+        els.pinBtn.classList.remove("active");
+        return;
+      }
+      els.emptyState.classList.add("hidden");
+      els.noteSurface.classList.remove("hidden");
+      els.titleInput.value = state.selectedNote.title || "";
+      setSaveState();
+      els.pinBtn.classList.toggle("active", !!state.selectedNote.pinnedAt);
+      els.pinBtn.title = state.selectedNote.pinnedAt ? "Unpin note" : "Pin note";
+      renderNoteTagsEdit();
+      const blocks = state.selectedNote.blocks || [];
+      els.blocks.innerHTML = blocks.map((b) => renderBlock(b)).join("");
+      bindBlockEnhancements();
+      iconRefresh();
+    }
+
+    function renderBlock(block) {
+      const menu = `<div class="block-add-gutter"><button class="block-gutter-btn" data-block-add="${block.id}" title="Add a block below" aria-label="Add block below"><i data-lucide="plus"></i></button></div><div class="block-menu"><button class="block-action danger" data-block-delete="${block.id}" aria-label="Delete block" title="Delete block"><i data-lucide="x"></i></button></div>`;
+      if (block.type === "heading")
+        return `<article class="block heading-block" data-block-id="${block.id}"><div class="editable" contenteditable="true" data-field="text" data-placeholder="Heading">${block.data.text || ""}</div>${menu}</article>`;
+      if (block.type === "checklist")
+        return `<article class="block checklist-block" data-block-id="${block.id}"><div class="check-block${block.data.checked ? " done" : ""}"><input type="checkbox" data-field="checked" ${block.data.checked ? "checked" : ""}><div class="editable" contenteditable="true" data-field="text" data-placeholder="To-do">${block.data.text || ""}</div></div>${menu}</article>`;
+      if (block.type === "image") return renderImageBlock(block, menu);
+      if (block.type === "file")
+        return `<article class="block" data-block-id="${block.id}">${fileCardHtml(block)}${menu}</article>`;
+      if (block.type === "audio" || block.type === "session" || block.type === "video") {
+        const isVideo = block.type === "video";
+        const label = isVideo ? "Video" : block.type === "session" ? "Full session" : "Voice clip";
+        const icon = isVideo ? "video" : block.type === "session" ? "radio" : "audio-lines";
+        const player = isVideo
+          ? `<video class="media-video" controls playsinline data-attachment-video="${block.data.attachmentId || ""}"></video>`
+          : `<audio controls data-attachment-audio="${block.data.attachmentId || ""}"></audio>`;
+        const hasImages = imageItems(block).length > 0;
+        return `<article class="block" data-block-id="${block.id}"><div class="audio-shell"><div class="audio-head"><div class="audio-title"><i data-lucide="${icon}"></i><span>${label}</span></div><span class="count">${formatTime(block.data.createdAt || state.selectedNote.updatedAt)}</span></div>${player}${hasImages ? imageGridHtml(block, "Add photo") : ""}${captionRowHtml(block, "Add note about this recording")}</div>${menu}</article>`;
+      }
+      if (block.type === "table")
+        return `<article class="block" data-block-id="${block.id}"><div class="table-shell"><div class="block-head"><div class="block-title"><i data-lucide="table"></i><span>${escapeHtml(block.data.title || "Table")}</span></div></div><div class="table-controls"><button class="mini-pill" data-table-row="${block.id}"><i data-lucide="plus"></i><span>Row</span></button><button class="mini-pill" data-table-column="${block.id}"><i data-lucide="columns-3"></i><span>Column</span></button><button class="mini-pill" data-chart-from-table="${block.id}"><i data-lucide="chart-column"></i><span>Chart it</span></button></div><div class="table-mount" id="table-${block.id}"></div></div>${menu}</article>`;
+      if (block.type === "chart")
+        return `<article class="block" data-block-id="${block.id}"><div class="chart-shell"><div class="block-head"><div class="block-title"><i data-lucide="chart-column"></i><span>Chart</span></div><select class="select" data-chart-type="${block.id}"><option value="bar" ${block.data.chartType === "bar" ? "selected" : ""}>Bar</option><option value="line" ${block.data.chartType === "line" ? "selected" : ""}>Line</option><option value="doughnut" ${block.data.chartType === "doughnut" ? "selected" : ""}>Doughnut</option></select></div><div class="chart-config"><textarea data-chart-labels="${block.id}" placeholder="Labels, comma separated">${(block.data.labels || []).join(", ")}</textarea><textarea data-chart-values="${block.id}" placeholder="Values, comma separated">${(block.data.values || []).join(", ")}</textarea></div><div class="chart-canvas-wrap"><canvas id="chart-${block.id}"></canvas></div></div>${menu}</article>`;
+      return `<article class="block text-block" data-block-id="${block.id}"><div class="editable" contenteditable="true" data-field="text" data-placeholder="Write something…">${block.data.text || ""}</div>${menu}</article>`;
+    }
+
+    // Work around MediaRecorder blobs that ship without duration metadata (duration === Infinity),
+    // which otherwise leaves the play button dead and the seek bar stuck.
+    function fixMediaDuration(media) {
+      media.addEventListener("loadedmetadata", () => {
+        if (media.duration === Infinity || isNaN(media.duration)) {
+          const onUpdate = () => { media.removeEventListener("timeupdate", onUpdate); try { media.currentTime = 0; } catch {} };
+          media.addEventListener("timeupdate", onUpdate);
+          try { media.currentTime = 1e101; } catch {}
+        }
+      }, { once: true });
+    }
+    async function bindBlockEnhancements() {
+      for (const img of $$("[data-attachment-image]")) {
+        img.onerror = () => { img.replaceWith(Object.assign(document.createElement("div"), { className: "image-empty", textContent: img.dataset.fallbackText || "Photo could not be loaded." })); };
+        if (img.getAttribute("src")) continue;
+        const blob = await getAttachmentBlob(img.dataset.attachmentImage);
+        if (blob) img.src = URL.createObjectURL(blob);
+      }
+      for (const audio of $$("[data-attachment-audio]")) {
+        if (!audio.dataset.attachmentAudio) continue;
+        const blob = await getAttachmentBlob(audio.dataset.attachmentAudio);
+        if (blob) { fixMediaDuration(audio); audio.src = URL.createObjectURL(blob); }
+      }
+      for (const video of $$("[data-attachment-video]")) {
+        if (!video.dataset.attachmentVideo) continue;
+        const blob = await getAttachmentBlob(video.dataset.attachmentVideo);
+        if (blob) { fixMediaDuration(video); video.src = URL.createObjectURL(blob); }
+      }
+      (state.selectedNote.blocks || []).filter((b) => b.type === "table").forEach(setupTableBlock);
+      (state.selectedNote.blocks || []).filter((b) => b.type === "chart").forEach(setupChartBlock);
+    }
+
+    function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+    function setupTableBlock(block) {
+      const mount = $(`#table-${CSS.escape(block.id)}`);
+      if (!mount || !window.Tabulator) return;
+      const columns = (block.data.columns || ["Name", "Value"]).map((column) => ({ title: column, field: column, editor: "input", formatter: column === "Progress" ? progressFormatter : undefined, resizable: true }));
+      const table = new Tabulator(mount, {
+        data: block.data.rows || [], columns, layout: "fitColumns", height: 230, movableColumns: true, reactiveData: false,
+        cellEdited: () => { block.data.rows = table.getData(); queueSave(); },
+        columnMoved: () => { block.data.columns = table.getColumnDefinitions().map((c) => c.field); block.data.rows = table.getData(); queueSave(); }
+      });
+      state.tableInstances.set(block.id, table);
+    }
+    function progressFormatter(cell) {
+      const value = String(cell.getValue() || "0%");
+      const percent = Math.max(0, Math.min(100, Number(value.replace("%", "")) || 0));
+      return `<span class="progress-cell"><span class="progress-track"><span class="progress-fill" style="width:${percent}%"></span></span><span>${escapeHtml(value)}</span></span>`;
+    }
+
+    function chartPalette() {
+      const accent = cssVar("--accent") || "#3b82f6";
+      return ["#3b82f6", "#16a34a", "#e08600", "#e5484d", "#7c5cff", "#0d9488", "#c03a78"].map((c, i) => i === 0 ? accent : c);
+    }
+    function setupChartBlock(block) {
+      const canvas = $(`#chart-${CSS.escape(block.id)}`);
+      if (!canvas || !window.Chart) return;
+      const accent = cssVar("--accent") || "#3b82f6";
+      const grid = cssVar("--border") || "rgba(0,0,0,.1)";
+      const tickColor = cssVar("--muted") || "#888";
+      const isDoughnut = (block.data.chartType || "bar") === "doughnut";
+      const chart = new Chart(canvas, {
+        type: block.data.chartType || "bar",
+        data: {
+          labels: block.data.labels || ["A", "B", "C"],
+          datasets: [{
+            label: block.data.title || "Values",
+            data: (block.data.values || [12, 19, 7]).map(Number),
+            borderColor: accent,
+            backgroundColor: isDoughnut ? chartPalette() : (block.data.chartType === "line" ? "transparent" : accent),
+            pointBackgroundColor: accent, pointBorderColor: cssVar("--surface"), pointBorderWidth: 2,
+            borderRadius: 6, fill: false, tension: 0.35
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: isDoughnut ? {} : {
+            x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 11 } } },
+            y: { grid: { color: grid }, ticks: { color: tickColor, font: { size: 11 } } }
+          },
+          plugins: { legend: { display: isDoughnut, position: "right", labels: { color: tickColor, font: { size: 11 } } } }
+        }
+      });
+      state.chartInstances.set(block.id, chart);
+    }
+    function refreshChartBlock(block) {
+      const chart = state.chartInstances.get(block.id);
+      if (!chart) return;
+      const isDoughnut = (block.data.chartType || "bar") === "doughnut";
+      if (chart.config.type !== (block.data.chartType || "bar")) { chart.destroy(); state.chartInstances.delete(block.id); setupChartBlock(block); return; }
+      chart.data.labels = block.data.labels || [];
+      chart.data.datasets[0].data = (block.data.values || []).map(Number);
+      chart.update();
+    }
+
+    function blockById(blockId) { return state.selectedNote?.blocks?.find((b) => b.id === blockId); }
+
+    function imageItems(block) {
+      if (!block?.data) return [];
+      if (Array.isArray(block.data.images)) return block.data.images;
+      // legacy single-image fallback only applies to image blocks (media blocks use attachmentId for the recording)
+      if (block.type === "image" && (block.data.src || block.data.attachmentId || block.data.fileName))
+        return [{ src: block.data.src || "", attachmentId: block.data.attachmentId || "", fileName: block.data.fileName || block.data.previewName || "", previewName: block.data.previewName || block.data.fileName || "", previewMimeType: block.data.previewMimeType || "", previewError: block.data.previewError || "" }];
+      return [];
+    }
+    function setImageItems(block, images) {
+      block.data.images = images;
+      if (block.type === "image") { block.data.src = ""; block.data.fileName = ""; block.data.previewName = ""; block.data.previewMimeType = ""; block.data.previewError = ""; }
+    }
+
+    function imageGridHtml(block) {
+      const images = imageItems(block);
+      return `<div class="image-grid">${images.map((image, index) => `<figure class="image-tile"><img class="image-preview" ${image.src ? `src="${image.src}"` : ""} data-fallback-text="${escapeHtml(image.previewError || "Photo could not be loaded.")}" data-attachment-image="${image.attachmentId || ""}" data-view-image="${block.id}:${index}" alt="${escapeHtml(stripTags(block.data.caption || image.fileName || "Note image"))}"><button class="image-remove" data-delete-image="${block.id}:${index}" aria-label="Delete photo"><i data-lucide="x"></i></button></figure>`).join("")}<button class="image-add-tile" data-pick-image="${block.id}" aria-label="Add photos" title="Add photos"><i data-lucide="image-plus"></i></button></div>`;
+    }
+    function fileIcon(file) {
+      const ext = (file.name || "").split(".").pop().toLowerCase();
+      if (["pdf"].includes(ext)) return "file-text";
+      if (["doc", "docx", "txt", "rtf", "md", "pages"].includes(ext)) return "file-text";
+      if (["xls", "xlsx", "csv", "numbers"].includes(ext)) return "file-spreadsheet";
+      if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return "file-archive";
+      return "file";
+    }
+    function formatBytes(n) { if (!n) return ""; const u = ["B", "KB", "MB", "GB"]; let v = n, i = 0; while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; } return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${u[i]}`; }
+    function fileSub(f) { const ext = (f.name || "").split(".").pop().toUpperCase(); const size = formatBytes(f.size); return [ext && ext.length <= 5 ? ext : "FILE", size].filter(Boolean).join(" · "); }
+    function fileCardHtml(block) {
+      const f = block.data;
+      return `<button class="file-card" data-open-file-block="${block.id}"><span class="file-card-icon"><i data-lucide="${fileIcon(f)}"></i></span><span class="file-card-info"><span class="file-card-name">${escapeHtml(f.name || "File")}</span><span class="file-card-sub">${fileSub(f)}</span></span><span class="file-card-dl"><i data-lucide="download"></i></span></button>`;
+    }
+    // Files / clips attached inside a block (via the caption paperclip).
+    function blockFilesHtml(block) {
+      const files = block.data.files || [];
+      if (!files.length) return "";
+      return `<div class="block-files">${files.map((f, i) => {
+        const mt = (f.mimeType || "").toLowerCase();
+        const del = `<button class="block-file-del" data-delete-file="${block.id}:${i}" title="Remove" aria-label="Remove"><i data-lucide="x"></i></button>`;
+        if (mt.startsWith("audio")) return `<div class="block-file-media"><audio controls data-attachment-audio="${f.attachmentId}"></audio>${del}</div>`;
+        if (mt.startsWith("video")) return `<div class="block-file-media"><video class="media-video" controls playsinline data-attachment-video="${f.attachmentId}"></video>${del}</div>`;
+        return `<div class="block-file-row"><button class="file-card" data-open-file="${block.id}:${i}"><span class="file-card-icon"><i data-lucide="${fileIcon(f)}"></i></span><span class="file-card-info"><span class="file-card-name">${escapeHtml(f.name)}</span><span class="file-card-sub">${fileSub(f)}</span></span><span class="file-card-dl"><i data-lucide="download"></i></span></button>${del}</div>`;
+      }).join("")}</div>`;
+    }
+    function captionRowHtml(block, placeholder) {
+      return `<div class="media-caption-row"><div class="editable block-caption" contenteditable="true" data-field="caption" data-placeholder="${placeholder}">${block.data.caption || ""}</div><button class="caption-photo-btn" data-attach-file="${block.id}" title="Add photos, files, or documents to this block" aria-label="Attach"><i data-lucide="paperclip"></i></button></div>${blockFilesHtml(block)}`;
+    }
+
+    /* ===== Ordered, flexible photo block (items model) ===== */
+    function ensureItems(block) {
+      if (Array.isArray(block.data.items)) return block.data.items;
+      const items = [];
+      const imgs = Array.isArray(block.data.images) ? block.data.images : [];
+      if (imgs.length) items.push({ id: uid(), kind: "photos", images: imgs });
+      else if (block.data.src || block.data.attachmentId || block.data.fileName)
+        items.push({ id: uid(), kind: "photos", images: [{ id: uid(), src: block.data.src || "", attachmentId: block.data.attachmentId || "", fileName: block.data.fileName || "", previewError: block.data.previewError || "" }] });
+      if (block.data.caption && String(block.data.caption).trim()) items.push({ id: uid(), kind: "text", text: block.data.caption });
+      for (const f of (block.data.files || [])) {
+        const mt = (f.mimeType || "").toLowerCase();
+        items.push({ id: uid(), kind: mt.startsWith("audio") ? "audio" : mt.startsWith("video") ? "video" : "file", attachmentId: f.attachmentId, name: f.name, mimeType: f.mimeType || "", size: f.size || 0 });
+      }
+      block.data.items = items;
+      ["images", "caption", "files", "src", "attachmentId", "fileName", "previewName", "previewMimeType", "previewError"].forEach((k) => delete block.data[k]);
+      return items;
+    }
+    function ensureTrailingText(items) {
+      if (!items.length || items[items.length - 1].kind !== "text") items.push({ id: uid(), kind: "text", text: "" });
+      return items;
+    }
+    function itemById(block, itemId) { return (block.data.items || []).find((it) => it.id === itemId); }
+
+    function renderImageBlock(block, menu) {
+      ensureItems(block); ensureTrailingText(block.data.items);
+      const inner = block.data.items.map((it) => renderItem(block.id, it)).join("");
+      return `<article class="block" data-block-id="${block.id}"><div class="image-shell rich-shell">${inner}<div class="rich-add-row"><button class="caption-photo-btn" data-attach-file="${block.id}" title="Add photos, files, or documents below" aria-label="Attach"><i data-lucide="paperclip"></i></button></div></div>${menu}</article>`;
+    }
+    function renderItem(blockId, item) {
+      if (item.kind === "photos") {
+        return `<div class="rich-photos"><div class="image-grid">${(item.images || []).map((img, idx) => `<figure class="image-tile"><img class="image-preview" ${img.src ? `src="${img.src}"` : ""} data-attachment-image="${img.attachmentId || ""}" data-view-item="${blockId}:${item.id}:${idx}" data-fallback-text="${escapeHtml(img.previewError || "Photo could not be loaded.")}" alt="${escapeHtml(img.fileName || "Photo")}"><button class="image-remove" data-del-item-image="${blockId}:${item.id}:${idx}" aria-label="Delete photo"><i data-lucide="x"></i></button></figure>`).join("")}<button class="image-add-tile" data-add-item-image="${blockId}:${item.id}" aria-label="Add photos" title="Add photos"><i data-lucide="image-plus"></i></button></div></div>`;
+      }
+      if (item.kind === "text")
+        return `<div class="editable block-caption rich-text" contenteditable="true" data-item-text="${blockId}:${item.id}" data-placeholder="Write something…">${item.text || ""}</div>`;
+      const del = `<button class="block-file-del" data-del-item="${blockId}:${item.id}" title="Remove" aria-label="Remove"><i data-lucide="x"></i></button>`;
+      if (item.kind === "audio") return `<div class="block-file-media"><audio controls data-attachment-audio="${item.attachmentId}"></audio>${del}</div>`;
+      if (item.kind === "video") return `<div class="block-file-media"><video class="media-video" controls playsinline data-attachment-video="${item.attachmentId}"></video>${del}</div>`;
+      return `<div class="block-file-row"><button class="file-card" data-open-item-file="${blockId}:${item.id}"><span class="file-card-icon"><i data-lucide="${fileIcon(item)}"></i></span><span class="file-card-info"><span class="file-card-name">${escapeHtml(item.name || "File")}</span><span class="file-card-sub">${fileSub(item)}</span></span><span class="file-card-dl"><i data-lucide="download"></i></span></button>${del}</div>`;
+    }
+    async function filesToImageItems(blockId, files) {
+      const out = [];
+      for (const file of files) {
+        try {
+          const preview = await imageFileToPreview(file);
+          const attachmentId = await attachBlob(blockId, file, "image", file.name, file.type || "application/octet-stream");
+          out.push({ id: uid(), src: preview.src, fileName: file.name, previewName: preview.previewName, previewMimeType: preview.previewMimeType, wasConverted: preview.converted, previewError: "", attachmentId });
+        } catch {
+          const attachmentId = await attachBlob(blockId, file, "image", file.name, file.type || "application/octet-stream");
+          out.push({ id: uid(), src: "", fileName: file.name, previewError: isHeicFile(file) ? "This HEIC file could not be converted in the browser." : "This photo could not be previewed.", attachmentId });
+        }
+      }
+      return out;
+    }
+
+    /* ============ Note CRUD ============ */
+    async function createNote(title = "Untitled", folderId = null) {
+      const targetFolderId = folderId || (state.selectedFolderId !== "all" && state.selectedFolderId) || defaultFolderId();
+      const minOrder = Math.min(0, ...state.notes.filter((n) => n.folderId === targetFolderId).map((n) => Number.isFinite(n.sortOrder) ? n.sortOrder : 0));
+      const note = { id: uid(), folderId: targetFolderId, title, tags: [], sortOrder: minOrder - 1, blocks: [{ id: uid(), type: "paragraph", data: { text: "" } }], createdAt: now(), updatedAt: now() };
+      await db.notes.add(note);
+      state.selectedNoteId = note.id; state.selectedNote = note;
+      await loadAll();
+      setTimeout(() => els.titleInput.focus(), 60);
+    }
+
+    async function createProjectPhoenixNote(folderId, shouldSelect = true, tags = []) {
+      const note = {
+        id: uid(), folderId: folderId || defaultFolderId(), title: "Project Phoenix – Meeting Notes", tags,
+        blocks: [
+          { id: uid(), type: "paragraph", data: { text: "We reviewed progress, discussed upcoming milestones, and aligned on next steps for Q2. The team is on track and confident about delivery." } },
+          { id: uid(), type: "heading", data: { text: "Key points" } },
+          { id: uid(), type: "paragraph", data: { text: "<ul><li>Finalize the budget by end of week</li><li>Confirm design system updates</li><li>Prepare user research for phase 2</li><li>Align with marketing on launch timeline</li></ul>" } },
+          { id: uid(), type: "heading", data: { text: "Budget Overview" } },
+          { id: uid(), type: "table", data: { title: "Budget Overview", columns: ["Category", "Budget", "Spent", "Remaining", "Progress"], rows: [
+            { Category: "Research", Budget: "$12,000", Spent: "$4,200", Remaining: "$7,800", Progress: "35%" },
+            { Category: "Design", Budget: "$18,000", Spent: "$7,600", Remaining: "$10,400", Progress: "42%" },
+            { Category: "Development", Budget: "$40,000", Spent: "$16,800", Remaining: "$23,200", Progress: "42%" },
+            { Category: "Marketing", Budget: "$10,000", Spent: "$2,300", Remaining: "$7,700", Progress: "23%" }
+          ] } },
+          { id: uid(), type: "heading", data: { text: "Progress Snapshot" } },
+          { id: uid(), type: "chart", data: { chartType: "line", title: "Tasks Completed", labels: ["1 Jun", "8 Jun", "15 Jun", "22 Jun", "29 Jun"], values: [0, 32, 63, 96, 82] } }
+        ],
+        createdAt: now(), updatedAt: now()
+      };
+      await db.notes.add(note);
+      if (shouldSelect) { state.selectedNoteId = note.id; state.selectedNote = note; await loadAll(); }
+    }
+
+    async function createFolder() {
+      const name = await askForText({ title: "New folder", copy: "Name this folder for the notes you want to collect.", value: "", placeholder: "Folder name" });
+      if (!name) return;
+      const maxOrder = Math.max(-1, ...state.folders.map((f) => Number.isFinite(f.sortOrder) ? f.sortOrder : -1));
+      const folder = { id: uid(), name: name.trim(), sortOrder: maxOrder + 1, createdAt: now(), updatedAt: now() };
+      await db.folders.add(folder);
+      state.selectedFolderId = folder.id;
+      await loadAll();
+    }
+
+    async function deleteFolder(folderId) {
+      const folder = state.folders.find((f) => f.id === folderId);
+      if (!folder || folder.name === "Archive") return;
+      const archiveId = state.folders.find((f) => f.name === "Archive")?.id || defaultFolderId();
+      const noteCount = state.notes.filter((n) => n.folderId === folderId).length;
+      if (archiveId && archiveId !== folderId) await db.notes.where("folderId").equals(folderId).modify({ folderId: archiveId, updatedAt: now() });
+      await db.folders.delete(folderId);
+      if (state.selectedFolderId === folderId) state.selectedFolderId = "all";
+      await loadAll();
+      toast(noteCount ? `Folder deleted. ${noteCount} note${noteCount === 1 ? "" : "s"} moved to Archive.` : "Folder deleted");
+    }
+
+    async function renameFolder(folderId) {
+      const folder = state.folders.find((f) => f.id === folderId);
+      if (!folder || folder.name === "Archive") return;
+      const name = await askForText({ title: "Rename folder", value: folder.name, placeholder: "Folder name" });
+      if (!name) return;
+      const nextName = name.trim();
+      if (!nextName || nextName === folder.name) return;
+      if (state.folders.some((f) => f.id !== folderId && f.name.toLowerCase() === nextName.toLowerCase())) { toast("Folder name already exists"); return; }
+      folder.name = nextName; folder.updatedAt = now();
+      await db.folders.put(folder);
+      await loadAll();
+      toast("Folder renamed");
+    }
+
+    async function toggleFolderPin(folderId) {
+      const folder = state.folders.find((f) => f.id === folderId);
+      if (!folder) return;
+      const pinned = !folder.pinnedAt;
+      folder.pinnedAt = pinned ? now() : ""; folder.updatedAt = now();
+      await db.folders.put(folder);
+      await loadAll();
+      toast(pinned ? "Folder pinned" : "Folder unpinned");
+    }
+
+    /* ============ Drag reordering ============ */
+    function clearFolderDropState() { $$(".folder-item").forEach((i) => i.classList.remove("dragging", "drop-before", "drop-after")); }
+    async function reorderFolder(draggedId, targetId, placement) {
+      if (!draggedId || !targetId || draggedId === targetId || targetId === "all" || draggedId === "all") return;
+      const ordered = sortFolders(state.folders);
+      const dragged = ordered.find((f) => f.id === draggedId);
+      const target = ordered.find((f) => f.id === targetId);
+      if (!dragged || !target) return;
+      const without = ordered.filter((f) => f.id !== draggedId);
+      const targetGroup = without.filter((f) => !!f.pinnedAt === !!target.pinnedAt);
+      const targetIndex = targetGroup.findIndex((f) => f.id === targetId);
+      if (targetIndex === -1) return;
+      dragged.pinnedAt = target.pinnedAt ? (dragged.pinnedAt || now()) : "";
+      targetGroup.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, dragged);
+      const otherGroup = without.filter((f) => !!f.pinnedAt !== !!target.pinnedAt);
+      const nextOrder = target.pinnedAt ? [...targetGroup, ...otherGroup] : [...otherGroup, ...targetGroup];
+      await Promise.all(nextOrder.map((f, i) => db.folders.update(f.id, { pinnedAt: f.pinnedAt || "", sortOrder: i, updatedAt: now() })));
+      await loadAll();
+    }
+    function folderDropTargetFromPoint(x, y) {
+      const target = document.elementFromPoint(x, y)?.closest("[data-folder-id]");
+      if (!target || target.dataset.folderId === state.folderPointerDrag?.folderId || target.dataset.folderId === "all") return null;
+      const rect = target.getBoundingClientRect();
+      return { target, placement: y > rect.top + rect.height / 2 ? "after" : "before" };
+    }
+    function updateFolderPointerDrag(x, y) {
+      clearFolderDropState();
+      const current = folderDropTargetFromPoint(x, y);
+      state.folderPointerDrag = { ...state.folderPointerDrag, targetId: current?.target?.dataset.folderId || null, placement: current?.placement || null };
+      current?.target.classList.add(current.placement === "after" ? "drop-after" : "drop-before");
+      $(`[data-folder-id="${CSS.escape(state.folderPointerDrag.folderId)}"]`)?.classList.add("dragging");
+    }
+
+    function clearNoteDropState() { $$(".note-item").forEach((i) => i.classList.remove("dragging", "drop-before", "drop-after")); }
+    function updateNotePointerDrag(x, y) {
+      clearNoteDropState();
+      const target = document.elementFromPoint(x, y)?.closest("[data-note-id]");
+      if (!target || target.dataset.noteId === state.notePointerDrag?.noteId) return;
+      const rect = target.getBoundingClientRect();
+      state.notePointerDrag.targetId = target.dataset.noteId;
+      state.notePointerDrag.placement = y > rect.top + rect.height / 2 ? "after" : "before";
+      target.classList.add(state.notePointerDrag.placement === "after" ? "drop-after" : "drop-before");
+      $(`[data-note-id="${CSS.escape(state.notePointerDrag.noteId)}"]`)?.classList.add("dragging");
+    }
+    async function reorderNote(draggedId, targetId, placement) {
+      if (!draggedId || !targetId || draggedId === targetId) return;
+      if (state.sortMode !== "manual") { state.sortMode = "manual"; prefs.sort = "manual"; }
+      const ordered = visibleNotes();
+      const dragged = state.notes.find((n) => n.id === draggedId);
+      const target = state.notes.find((n) => n.id === targetId);
+      if (!dragged || !target) return;
+      const without = ordered.filter((n) => n.id !== draggedId);
+      const targetIndex = without.findIndex((n) => n.id === targetId);
+      if (targetIndex === -1) return;
+      dragged.pinnedAt = target.pinnedAt ? (dragged.pinnedAt || now()) : "";
+      without.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, dragged);
+      await Promise.all(without.map((n, i) => db.notes.update(n.id, { pinnedAt: n.pinnedAt || "", sortOrder: i, updatedAt: n.updatedAt })));
+      await loadAll();
+    }
+
+    function clearBlockDropState() { $$(".block").forEach((i) => i.classList.remove("dragging", "drop-before", "drop-after")); }
+    function updateBlockPointerDrag(x, y) {
+      clearBlockDropState();
+      const target = document.elementFromPoint(x, y)?.closest("[data-block-id]");
+      if (!target || target.dataset.blockId === state.blockPointerDrag?.blockId) return;
+      const rect = target.getBoundingClientRect();
+      state.blockPointerDrag.targetId = target.dataset.blockId;
+      state.blockPointerDrag.placement = y > rect.top + rect.height / 2 ? "after" : "before";
+      target.classList.add(state.blockPointerDrag.placement === "after" ? "drop-after" : "drop-before");
+      $(`[data-block-id="${CSS.escape(state.blockPointerDrag.blockId)}"]`)?.classList.add("dragging");
+    }
+    async function reorderBlock(draggedId, targetId, placement) {
+      if (!state.selectedNote || !draggedId || !targetId || draggedId === targetId) return;
+      const blocks = state.selectedNote.blocks || [];
+      const dragged = blocks.find((b) => b.id === draggedId);
+      const without = blocks.filter((b) => b.id !== draggedId);
+      const targetIndex = without.findIndex((b) => b.id === targetId);
+      if (!dragged || targetIndex === -1) return;
+      without.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, dragged);
+      state.selectedNote.blocks = without;
+      await saveNow();
+      renderEditor();
+    }
+
+    /* ============ Blocks ============ */
+    function makeBlock(type) {
+      const base = { id: uid(), type, data: {} };
+      if (type === "heading" || type === "paragraph") base.data = { text: "" };
+      if (type === "checklist") base.data = { text: "", checked: false };
+      if (type === "image") base.data = { items: [{ id: uid(), kind: "photos", images: [] }] };
+      if (type === "table") base.data = { title: "Table", columns: ["Name", "Value", "Notes"], rows: [{ Name: "Idea", Value: 10, Notes: "Edit me" }, { Name: "Draft", Value: 6, Notes: "" }] };
+      if (type === "chart") base.data = { chartType: "bar", labels: ["Idea", "Draft", "Done"], values: [10, 6, 3] };
+      return base;
+    }
+    async function addBlock(type) {
+      if (!state.selectedNote) return;
+      const block = makeBlock(type);
+      state.selectedNote.blocks.push(block);
+      await saveNow();
+      renderEditor();
+      if (type === "image") pickImage(block.id);
+      else focusBlock(block.id);
+    }
+
+    // Insert a fresh block right after the anchor block (Notion-style inline insertion).
+    async function insertBlockAfter(anchorId, type) {
+      if (!state.selectedNote) return;
+      const blocks = state.selectedNote.blocks;
+      let idx = anchorId ? blocks.findIndex((b) => b.id === anchorId) : blocks.length - 1;
+      if (idx < 0) idx = blocks.length - 1;
+      const block = makeBlock(type);
+      blocks.splice(idx + 1, 0, block);
+      await saveNow();
+      renderEditor();
+      if (type === "image") pickImage(block.id);
+      else focusBlock(block.id);
+    }
+    function focusBlock(blockId) {
+      requestAnimationFrame(() => {
+        const el = $(`[data-block-id="${CSS.escape(blockId)}"] .editable`);
+        if (el) { el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      });
+    }
+    function openInsertMenu(anchorId, anchorEl) {
+      els.popover.dataset.anchorId = anchorId || "";
+      openPopover(`
+        <div class="menu-heading">Insert below</div>
+        <button class="menu-item" data-insert="paragraph"><i data-lucide="type"></i><span>Text</span></button>
+        <button class="menu-item" data-insert="heading"><i data-lucide="heading"></i><span>Heading</span></button>
+        <button class="menu-item" data-insert="checklist"><i data-lucide="square-check-big"></i><span>Checklist</span></button>
+        <button class="menu-item" data-insert="image"><i data-lucide="image"></i><span>Photo gallery</span></button>
+        <button class="menu-item" data-insert="table"><i data-lucide="table"></i><span>Table</span></button>
+        <button class="menu-item" data-insert="chart"><i data-lucide="chart-column"></i><span>Chart</span></button>
+      `, anchorEl, { align: "left" });
+    }
+
+    function queueSave() { if (!state.selectedNote) return; setSaveState("Saving..."); clearTimeout(state.saveTimer); state.saveTimer = setTimeout(saveNow, 450); }
+    async function saveNow() {
+      if (!state.selectedNote) return;
+      state.selectedNote.updatedAt = now();
+      await db.notes.put(state.selectedNote);
+      const index = state.notes.findIndex((n) => n.id === state.selectedNote.id);
+      if (index >= 0) state.notes[index] = structuredClone(state.selectedNote);
+      setSaveState();
+      renderNotes(); renderFolderSelect(); iconRefresh();
+      scheduleSync();
+    }
+
+    function pickImage(blockId, itemId = "") { els.imageInput.dataset.blockId = blockId; els.imageInput.dataset.itemId = itemId; els.imageInput.click(); }
+    function pickAttachmentInto(blockId) { els.attachInput.dataset.mode = "into"; els.attachInput.dataset.blockId = blockId; els.attachInput.dataset.anchorId = ""; els.attachInput.click(); }
+    function pickAttachmentNew(anchorId = "") { els.attachInput.dataset.mode = "new"; els.attachInput.dataset.blockId = ""; els.attachInput.dataset.anchorId = anchorId; els.attachInput.click(); }
+    async function attachBlob(blockId, blob, type, name, mimeType) {
+      const id = uid();
+      const attachment = { id, noteId: state.selectedNote.id, blockId, type, name, mimeType, blob, createdAt: now() };
+      if (cloudReady()) {
+        try {
+          const path = `${currentUser.id}/${id}`;
+          const { error } = await sb.storage.from("attachments").upload(path, blob, { contentType: mimeType || "application/octet-stream", upsert: true });
+          if (!error) attachment.storagePath = path;
+          else console.warn("upload failed", error.message);
+        } catch (e) { console.warn("upload error", e); }
+      }
+      await db.attachments.add(attachment);
+      return id;
+    }
+    // Returns a Blob for an attachment, fetching from Supabase Storage if it isn't cached locally.
+    async function getAttachmentBlob(attachmentId) {
+      if (!attachmentId) return null;
+      const att = await db.attachments.get(attachmentId);
+      if (att?.blob) return att.blob;
+      if (!cloudReady()) return null;
+      try {
+        const path = att?.storagePath || `${currentUser.id}/${attachmentId}`;
+        const { data, error } = await sb.storage.from("attachments").download(path);
+        if (error || !data) return null;
+        if (att) await db.attachments.update(attachmentId, { blob: data });
+        return data;
+      } catch { return null; }
+    }
+    function isImageFile(file) { return (file.type || "").startsWith("image") || isHeicFile(file); }
+
+    // Add image files to a block's photo gallery; returns counts.
+    async function addImagesToBlock(block, files) {
+      const images = imageItems(block);
+      let convertedCount = 0, failedCount = 0;
+      for (const file of files) {
+        try {
+          const preview = await imageFileToPreview(file);
+          const attachmentId = await attachBlob(block.id, file, "image", file.name, file.type || "application/octet-stream");
+          images.push({ id: uid(), src: preview.src, fileName: file.name, previewName: preview.previewName, previewMimeType: preview.previewMimeType, wasConverted: preview.converted, previewError: "", attachmentId });
+          if (preview.converted) convertedCount += 1;
+        } catch {
+          failedCount += 1;
+          const attachmentId = await attachBlob(block.id, file, "image", file.name, file.type || "application/octet-stream");
+          images.push({ id: uid(), src: "", fileName: file.name, previewName: "", previewMimeType: "", wasConverted: false, previewError: isHeicFile(file) ? "This HEIC file could not be converted in the browser." : "This photo could not be previewed.", attachmentId });
+        }
+      }
+      setImageItems(block, images);
+      return { convertedCount, failedCount };
+    }
+
+    async function selectNote(noteId) {
+      state.selectedNoteId = noteId;
+      state.selectedNote = state.notes.find((n) => n.id === noteId) || null;
+      els.noteListPane.classList.remove("mobile-open");
+      renderAll();
+    }
+
+    async function deleteNote(noteId = state.selectedNote?.id) {
+      const target = state.notes.find((n) => n.id === noteId);
+      if (!target) return;
+      if (!confirm(`Delete "${target.title || "Untitled"}"?`)) return;
+      const atts = await db.attachments.where("noteId").equals(target.id).toArray();
+      if (cloudReady() && atts.length) { try { await sb.storage.from("attachments").remove(atts.map((a) => a.storagePath || `${currentUser.id}/${a.id}`)); } catch {} }
+      await db.notes.delete(target.id);
+      await db.attachments.where("noteId").equals(target.id).delete();
+      state.selectedNoteId = null; state.selectedNote = null;
+      await loadAll();
+      toast("Note deleted");
+    }
+
+    async function duplicateNote(noteId = state.selectedNote?.id) {
+      const source = state.notes.find((n) => n.id === noteId);
+      if (!source) return;
+      const copy = structuredClone(source);
+      const oldId = copy.id;
+      copy.id = uid(); copy.title = `${copy.title || "Untitled"} copy`; copy.createdAt = now(); copy.updatedAt = now();
+      copy.sortOrder = (Number.isFinite(source.sortOrder) ? source.sortOrder : 0) - 0.1;
+      copy.blocks = copy.blocks.map((b) => ({ ...b, id: uid(), data: { ...b.data } }));
+      await db.notes.add(copy);
+      const attachments = await db.attachments.where("noteId").equals(oldId).toArray();
+      const blockPairs = (source.blocks || []).map((ob, i) => [ob.id, copy.blocks[i].id]);
+      for (const attachment of attachments) {
+        const na = { ...attachment, id: uid(), noteId: copy.id, blockId: blockPairs.find(([oid]) => oid === attachment.blockId)?.[1] || copy.blocks[0].id };
+        await db.attachments.add(na);
+        const cb = copy.blocks.find((b) => b.id === na.blockId);
+        if (cb?.data?.attachmentId === attachment.id) cb.data.attachmentId = na.id;
+      }
+      await db.notes.put(copy);
+      state.selectedNoteId = copy.id;
+      await loadAll();
+      toast("Note duplicated");
+    }
+
+    async function renameNote(noteId = state.selectedNote?.id) {
+      const target = state.notes.find((n) => n.id === noteId);
+      if (!target) return;
+      const name = await askForText({ title: "Rename note", value: target.title || "Untitled", placeholder: "Note title" });
+      if (!name) return;
+      const nextName = name.trim();
+      if (!nextName || nextName === target.title) return;
+      target.title = nextName; target.updatedAt = now();
+      await db.notes.put(target);
+      if (state.selectedNote?.id === noteId) state.selectedNote = target;
+      await loadAll();
+      toast("Note renamed");
+    }
+
+    async function toggleNotePin(noteId = state.selectedNote?.id) {
+      const target = state.notes.find((n) => n.id === noteId);
+      if (!target) return;
+      const pinned = !target.pinnedAt;
+      target.pinnedAt = pinned ? now() : ""; target.updatedAt = now();
+      await db.notes.put(target);
+      if (state.selectedNote?.id === noteId) state.selectedNote = target;
+      await loadAll();
+      toast(pinned ? "Note pinned" : "Note unpinned");
+    }
+
+    async function moveNoteToFolder(noteId, folderId) {
+      const target = state.notes.find((n) => n.id === noteId);
+      const folder = state.folders.find((f) => f.id === folderId);
+      if (!target || !folder) return;
+      target.folderId = folderId; target.updatedAt = now();
+      await db.notes.put(target);
+      if (state.selectedNote?.id === noteId) state.selectedNote = target;
+      closePopover();
+      await loadAll();
+      toast(`Moved to ${folder.name}`);
+    }
+
+    function noteToText(note) {
+      const lines = [`# ${note.title || "Untitled"}`, ""];
+      const tags = noteTagObjects(note);
+      if (tags.length) lines.push(`Tags: ${tags.map((t) => t.name).join(", ")}`, "");
+      for (const block of note.blocks || []) {
+        if (["paragraph", "heading", "checklist"].includes(block.type)) {
+          const prefix = block.type === "checklist" ? (block.data.checked ? "[x] " : "[ ] ") : "";
+          lines.push(prefix + stripTags(block.data.text || ""));
+        } else if (block.type === "image") {
+          for (const it of (block.data.items || [])) {
+            if (it.kind === "text") { const tx = stripTags(it.text || "").trim(); if (tx) lines.push(tx); }
+            else if (it.kind === "photos") lines.push(`[Photos] ${(it.images || []).length} image(s)`);
+            else if (it.kind === "file") lines.push(`[File] ${it.name || ""}`.trim());
+            else if (it.kind === "audio" || it.kind === "video") lines.push(`[${it.kind === "video" ? "Video" : "Audio"}] ${it.name || ""}`.trim());
+          }
+        }
+        else if (block.type === "file") lines.push(`[File] ${block.data.name || ""}`.trim());
+        else if (block.type === "video") lines.push(`[Video] ${stripTags(block.data.caption || "")}`.trim());
+        else if (block.type === "audio" || block.type === "session") lines.push(`[${block.type === "session" ? "Full session" : "Voice clip"}] ${stripTags(block.data.caption || "")}`.trim());
+        else if (block.type === "table") { lines.push("[Table]", (block.data.columns || []).join("\t")); (block.data.rows || []).forEach((row) => lines.push((block.data.columns || []).map((c) => row[c] ?? "").join("\t"))); }
+        else if (block.type === "chart") lines.push(`[Chart] ${(block.data.labels || []).join(", ")} | ${(block.data.values || []).join(", ")}`);
+        lines.push("");
+      }
+      return lines.join("\n");
+    }
+
+    async function shareNote(noteId = state.selectedNote?.id) {
+      const target = state.notes.find((n) => n.id === noteId);
+      if (!target) return;
+      const text = noteToText(target);
+      try { await navigator.clipboard.writeText(text); toast("Note copied to clipboard"); }
+      catch { downloadFile(`${safeFileName(target.title || "note")}.txt`, text, "text/plain"); toast("Note exported as text"); }
+    }
+
+    /* ============ Import / export ============ */
+    async function exportJson() {
+      const folders = await db.folders.toArray();
+      const notes = await db.notes.toArray();
+      const tags = await db.tags.toArray();
+      const attachments = await db.attachments.toArray();
+      const attachmentData = [];
+      for (const a of attachments) { const blob = a.blob || await getAttachmentBlob(a.id); if (blob) attachmentData.push({ ...a, blob: await blobToDataUrl(blob) }); }
+      downloadFile(`note-buddy-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: "Note Buddy", version: 2, exportedAt: now(), folders, notes, tags, attachments: attachmentData }, null, 2), "application/json");
+      toast("Backup downloaded");
+    }
+    async function importJson(file) {
+      const backup = JSON.parse(await file.text());
+      if (!Array.isArray(backup.folders) || !Array.isArray(backup.notes)) throw new Error("Invalid backup");
+      await db.transaction("rw", db.folders, db.notes, db.tags, db.attachments, async () => {
+        await db.folders.clear(); await db.notes.clear(); await db.tags.clear(); await db.attachments.clear();
+        await db.folders.bulkAdd(backup.folders);
+        await db.notes.bulkAdd(backup.notes.map((n) => ({ ...n, tags: Array.isArray(n.tags) ? n.tags : [] })));
+        if (Array.isArray(backup.tags) && backup.tags.length) await db.tags.bulkAdd(backup.tags);
+        const attachments = await Promise.all((backup.attachments || []).map(async (a) => ({ ...a, blob: await dataUrlToBlob(a.blob) })));
+        if (attachments.length) await db.attachments.bulkAdd(attachments);
+      });
+      state.selectedFolderId = "all"; state.selectedNoteId = null;
+      await loadAll();
+      toast("Backup imported");
+    }
+    function exportTxt(noteId = state.selectedNote?.id) {
+      const target = state.notes.find((n) => n.id === noteId) || state.selectedNote;
+      if (!target) { toast("Select a note first"); return; }
+      downloadFile(`${safeFileName(target.title || "note")}.txt`, noteToText(target), "text/plain");
+      toast("Note exported");
+    }
+    function downloadFile(name, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = name; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    function downloadBlob(blob, name) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = name || "file"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    function safeFileName(value) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "note"; }
+    function blobToDataUrl(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); }); }
+    function fileToDataUrl(file) { return blobToDataUrl(file); }
+    function isHeicFile(file) { const n = (file.name || "").toLowerCase(), t = (file.type || "").toLowerCase(); return n.endsWith(".heic") || n.endsWith(".heif") || t.includes("heic") || t.includes("heif"); }
+    async function imageFileToPreview(file) {
+      if (!isHeicFile(file)) return { src: await fileToDataUrl(file), previewName: file.name, previewMimeType: file.type || "image/*", converted: false };
+      if (typeof heic2any !== "function") throw new Error("HEIC converter is not available");
+      const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+      const previewBlob = Array.isArray(converted) ? converted[0] : converted;
+      return { src: await blobToDataUrl(previewBlob), previewName: file.name.replace(/\.(heic|heif)$/i, ".jpg"), previewMimeType: "image/jpeg", converted: true };
+    }
+    async function dataUrlToBlob(dataUrl) { return (await fetch(dataUrl)).blob(); }
+
+    /* ============ Recording ============ */
+    function pickAudioMime() {
+      if (!window.MediaRecorder) return "";
+      for (const t of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"]) {
+        if (MediaRecorder.isTypeSupported(t)) return t;
+      }
+      return "";
+    }
+    let recTimer = null, recStart = 0;
+    function setRecordBtn(html) { els.recordBtn.innerHTML = html; iconRefresh(); }
+    function tickRecTimer() {
+      const s = Math.max(0, Math.floor((Date.now() - recStart) / 1000));
+      setRecordBtn(`<i data-lucide="square"></i><span>Stop ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}</span>`);
+    }
+    function startRecTimer() { recStart = Date.now(); tickRecTimer(); recTimer = setInterval(tickRecTimer, 500); }
+    function stopRecTimer() { clearInterval(recTimer); recTimer = null; els.recorder.classList.remove("is-recording"); setRecordBtn(`<i data-lucide="mic"></i><span>Record</span>`); }
+
+    /* Live waveform/level meter while recording (also confirms the mic is being heard). */
+    let meterCtx = null, meterAnalyser = null, meterRaf = null;
+    function startMeter(stream) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        meterCtx = new AC();
+        const src = meterCtx.createMediaStreamSource(stream);
+        meterAnalyser = meterCtx.createAnalyser();
+        meterAnalyser.fftSize = 64;
+        meterAnalyser.smoothingTimeConstant = 0.6;
+        src.connect(meterAnalyser);
+        const canvas = $("#recWave"); if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const bins = meterAnalyser.frequencyBinCount;
+        const data = new Uint8Array(bins);
+        const bars = 18, gap = 2;
+        const render = () => {
+          meterRaf = requestAnimationFrame(render);
+          meterAnalyser.getByteFrequencyData(data);
+          const w = canvas.width, h = canvas.height;
+          ctx.clearRect(0, 0, w, h);
+          ctx.fillStyle = cssVar("--accent") || "#f97316";
+          const bw = (w - gap * (bars - 1)) / bars;
+          for (let i = 0; i < bars; i++) {
+            const v = data[Math.floor(i * bins / bars)] / 255;
+            const bh = Math.max(2, v * v * h);
+            ctx.fillRect(i * (bw + gap), (h - bh) / 2, bw, bh);
+          }
+        };
+        render();
+      } catch {}
+    }
+    function stopMeter() {
+      if (meterRaf) cancelAnimationFrame(meterRaf); meterRaf = null;
+      if (meterCtx) { try { meterCtx.close(); } catch {} meterCtx = null; }
+      meterAnalyser = null;
+      const canvas = $("#recWave"); if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Re-encode a recorded blob to WAV (correct duration + universal playback). Falls back to the raw blob.
+    function encodeWav(audioBuffer) {
+      const sampleRate = audioBuffer.sampleRate;
+      const n = audioBuffer.length;
+      let samples = audioBuffer.getChannelData(0);
+      if (audioBuffer.numberOfChannels > 1) {
+        const a = audioBuffer.getChannelData(0), b = audioBuffer.getChannelData(1);
+        samples = new Float32Array(n);
+        for (let i = 0; i < n; i++) samples[i] = (a[i] + b[i]) / 2;
+      }
+      const buffer = new ArrayBuffer(44 + n * 2);
+      const view = new DataView(buffer);
+      const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+      writeStr(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); writeStr(8, "WAVE");
+      writeStr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+      writeStr(36, "data"); view.setUint32(40, n * 2, true);
+      let off = 44;
+      for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, samples[i])); view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true); off += 2; }
+      return new Blob([view], { type: "audio/wav" });
+    }
+    async function toPlayableAudio(rawBlob) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) throw 0;
+        const ac = new AC();
+        const audioBuffer = await ac.decodeAudioData(await rawBlob.arrayBuffer());
+        try { ac.close(); } catch {}
+        if (!audioBuffer || !audioBuffer.length) throw 0;
+        return { blob: encodeWav(audioBuffer), type: "audio/wav", ext: "wav" };
+      } catch {
+        const type = rawBlob.type || "audio/webm";
+        return { blob: rawBlob, type, ext: type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm" };
+      }
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { toast("Recording isn't supported in this browser"); return; }
+      if (!window.isSecureContext) { toast("Recording needs https:// or localhost"); return; }
+      if (!state.selectedNote) { toast("Open a note first"); return; }
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      } catch (e) {
+        toast(e?.name === "NotAllowedError" ? "Microphone permission was denied" : "Couldn't access the microphone");
+        return;
+      }
+      const mime = pickAudioMime();
+      let recorder;
+      try { recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
+      catch { try { recorder = new MediaRecorder(stream); } catch { stream.getTracks().forEach((t) => t.stop()); toast("Recording isn't supported in this browser"); return; } }
+      const chunks = [];
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        stopMeter(); stopRecTimer();
+        const rawType = recorder.mimeType || mime || "audio/webm";
+        const raw = new Blob(chunks, { type: rawType });
+        if (!raw.size) { toast("No audio captured — check your microphone input"); return; }
+        const { blob, type, ext } = await toPlayableAudio(raw);
+        const block = { id: uid(), type: "audio", data: { createdAt: now(), caption: "" } };
+        const attachmentId = await attachBlob(block.id, blob, "audio", `recording-${Date.now()}.${ext}`, type);
+        block.data.attachmentId = attachmentId;
+        state.selectedNote.blocks.push(block);
+        await saveNow();
+        renderEditor();
+        toast("Recording saved");
+      };
+      recorder.start(1000); // flush data every second so chunks aren't lost
+      state.recording = recorder;
+      els.recorder.classList.add("is-recording");
+      startMeter(stream);
+      startRecTimer();
+    }
+    function stopRecording() {
+      if (!state.recording) return;
+      try { state.recording.stop(); } catch {}
+      state.recording = null;
+      stopMeter(); stopRecTimer();
+    }
+
+    /* ============ Popovers ============ */
+    function openPopover(html, anchor, { className = "", align = "right" } = {}) {
+      els.popover.className = `popover ${className}`;
+      els.popover.innerHTML = html;
+      els.popover.classList.remove("hidden");
+      iconRefresh();
+      const rect = anchor.getBoundingClientRect();
+      const pr = els.popover.getBoundingClientRect();
+      let left = align === "right" ? rect.right - pr.width : rect.left;
+      left = Math.min(window.innerWidth - pr.width - 12, Math.max(12, left));
+      let top = rect.bottom + 6;
+      if (top + pr.height > window.innerHeight - 12) top = Math.max(12, rect.top - pr.height - 6);
+      els.popover.style.left = `${left}px`;
+      els.popover.style.top = `${top}px`;
+    }
+    function closePopover() { els.popover.classList.add("hidden"); els.popover.dataset.noteId = ""; }
+
+    /* ============ Lightbox ============ */
+    const lb = { images: [], index: 0, blockId: null };
+    async function resolveImageSrc(image) {
+      if (image.src) return image.src;
+      const blob = await getAttachmentBlob(image.attachmentId);
+      return blob ? URL.createObjectURL(blob) : "";
+    }
+    async function openLightbox(blockId, index) {
+      const block = blockById(blockId); if (!block) return;
+      lb.images = imageItems(block); lb.blockId = blockId; lb.index = index;
+      if (!lb.images.length) return;
+      await showLightbox(index);
+      $("#lightbox").classList.remove("hidden");
+    }
+    async function openLightboxItem(blockId, itemId, index) {
+      const block = blockById(blockId); const item = block && itemById(block, itemId); if (!item) return;
+      lb.images = item.images || []; lb.blockId = blockId; lb.index = index;
+      if (!lb.images.length) return;
+      await showLightbox(index);
+      $("#lightbox").classList.remove("hidden");
+    }
+    async function showLightbox(index) {
+      const total = lb.images.length;
+      lb.index = (index + total) % total;
+      const src = await resolveImageSrc(lb.images[lb.index]);
+      $("#lbImg").src = src;
+      $("#lbCounter").textContent = `${lb.index + 1} / ${total}`;
+      $("#lbPrev").classList.toggle("hidden", total < 2);
+      $("#lbNext").classList.toggle("hidden", total < 2);
+      $("#lbCounter").classList.toggle("hidden", total < 2);
+    }
+    function closeLightbox() { $("#lightbox").classList.add("hidden"); $("#lbImg").src = ""; }
+
+    function openNoteMenu(noteId, anchor) {
+      const note = state.notes.find((n) => n.id === noteId);
+      if (!note || !anchor) return;
+      els.popover.dataset.noteId = noteId;
+      const pinned = !!note.pinnedAt;
+      openPopover(`
+        <button class="menu-item" data-note-action="pin"><i data-lucide="pin"></i><span>${pinned ? "Unpin from top" : "Pin to top"}</span></button>
+        <button class="menu-item" data-note-action="rename"><i data-lucide="pencil"></i><span>Rename</span></button>
+        <button class="menu-item" data-note-action="duplicate"><i data-lucide="copy"></i><span>Duplicate</span></button>
+        <button class="menu-item" data-note-action="share"><i data-lucide="share"></i><span>Copy as text</span></button>
+        <button class="menu-item" data-note-action="export"><i data-lucide="file-down"></i><span>Export TXT</span></button>
+        <button class="menu-item" data-note-action="move"><i data-lucide="folder-input"></i><span>Move to folder</span></button>
+        <div class="menu-sep"></div>
+        <button class="menu-item danger" data-note-action="delete"><i data-lucide="trash-2"></i><span>Delete note</span></button>
+      `, anchor);
+    }
+    function openMoveMenu(noteId, anchor) {
+      const target = state.notes.find((n) => n.id === noteId);
+      els.popover.dataset.noteId = noteId;
+      openPopover(`<div class="menu-heading">Move to folder</div>${sortFolders(state.folders).map((f) => `<button class="menu-item${f.id === target?.folderId ? " checked" : ""}" data-folder-move="${f.id}"><i data-lucide="${f.id === target?.folderId ? "check" : "folder"}"></i><span>${escapeHtml(f.name)}</span></button>`).join("")}`, anchor);
+    }
+    function openFolderSwitcher(anchor) {
+      const counts = state.notes.reduce((a, n) => { a[n.folderId] = (a[n.folderId] || 0) + 1; return a; }, {});
+      const items = [`<button class="menu-item${state.selectedFolderId === "all" ? " checked" : ""}" data-switch-folder="all"><i data-lucide="${state.selectedFolderId === "all" ? "check" : "layers"}"></i><span>All Notes</span></button>`]
+        .concat(sortFolders(state.folders).map((f) => `<button class="menu-item${state.selectedFolderId === f.id ? " checked" : ""}" data-switch-folder="${f.id}"><i data-lucide="${state.selectedFolderId === f.id ? "check" : "folder"}"></i><span>${escapeHtml(f.name)}</span><span class="count" style="margin-left:auto;">${counts[f.id] || 0}</span></button>`));
+      openPopover(items.join(""), anchor, { align: "left" });
+    }
+    function openNoteTagPicker(anchor) {
+      if (!state.selectedNote) return;
+      const assigned = new Set(state.selectedNote.tags || []);
+      const list = state.tags.map((t) => `<button class="menu-item${assigned.has(t.id) ? " checked" : ""}" data-toggle-note-tag="${t.id}"><span class="tag-dot dot-${t.color}"></span><span>${escapeHtml(t.name)}</span>${assigned.has(t.id) ? `<i data-lucide="check" style="margin-left:auto;"></i>` : ""}</button>`).join("");
+      openPopover(`<div class="menu-heading">Assign tags</div>${list || `<div class="tag-empty">No tags yet</div>`}<div class="menu-sep"></div><button class="menu-item" data-create-note-tag><i data-lucide="plus"></i><span>Create new tag</span></button>`, anchor, { align: "left" });
+    }
+    function openFilterPopover(anchor) {
+      const sortBtn = (mode, label) => `<button data-sort="${mode}" class="${state.sortMode === mode ? "active" : ""}">${label}</button>`;
+      const typeChip = (type, label) => `<button class="filter-chip${state.filterTypes.has(type) ? " active" : ""}" data-filter-type="${type}">${label}</button>`;
+      const tagChip = (t) => `<button class="filter-chip${state.filterTagIds.has(t.id) ? " active" : ""}" data-filter-tag="${t.id}"><span class="tag-dot dot-${t.color}"></span>${escapeHtml(t.name)}</button>`;
+      openPopover(`
+        <div class="filter-group">
+          <span class="filter-group-label">Sort by</span>
+          <div class="seg">${sortBtn("updated", "Recent")}${sortBtn("created", "Created")}${sortBtn("title", "Title A–Z")}${sortBtn("manual", "Manual")}</div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-group-label">Tags</span>
+          <div class="chip-wrap">${state.tags.length ? state.tags.map(tagChip).join("") : `<span class="tag-empty">No tags</span>`}</div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-group-label">Content</span>
+          <div class="chip-wrap">${typeChip("text", "Text")}${typeChip("checklist", "Checklist")}${typeChip("image", "Photo")}${typeChip("audio", "Audio")}${typeChip("table", "Table")}${typeChip("chart", "Chart")}</div>
+        </div>
+        <button class="filter-clear" data-clear-filters>Clear all filters</button>
+      `, anchor, { className: "filter-pop", align: "right" });
+    }
+
+    /* ============ Settings ============ */
+    function openSettings() {
+      $("#settingsName").value = prefs.name;
+      $$("#themeSeg button").forEach((b) => b.classList.toggle("active", b.dataset.themeChoice === prefs.theme));
+      $$("#accentRow .swatch").forEach((b) => b.classList.toggle("active", b.dataset.accentChoice === prefs.accent));
+      renderTagManage();
+      const acct = $("#settingsAccount");
+      if (cloudReady()) { acct.classList.remove("hidden"); $("#settingsEmail").textContent = currentUser.email || ""; }
+      else acct.classList.add("hidden");
+      els.settingsModal.classList.remove("hidden");
+      iconRefresh();
+    }
+    function renderTagManage() {
+      const list = $("#tagManageList");
+      if (!state.tags.length) { list.innerHTML = `<div class="tag-empty">No tags yet.</div>`; return; }
+      list.innerHTML = state.tags.map((t) => `<div class="tag-manage-row">
+        <span class="tag tg-${t.color}" style="max-width:none;"><span class="tag-name">${escapeHtml(t.name)}</span></span>
+        <span class="tag-manage-colors">${TAG_COLORS.map((c) => `<button class="tag-color-dot dot-${c}${c === t.color ? " active" : ""}" data-set-tag-color="${t.id}:${c}" title="${c}"></button>`).join("")}</span>
+        <button class="tag-manage-del" data-delete-tag="${t.id}" aria-label="Delete tag"><i data-lucide="trash-2"></i></button>
+      </div>`).join("");
+      iconRefresh();
+    }
+
+    /* ============ Global click handling ============ */
+    document.addEventListener("click", async (event) => {
+      if (state.suppressNextClick) { event.preventDefault(); event.stopPropagation(); state.suppressNextClick = false; return; }
+      if (event.target.closest("[data-note-title]")) { event.stopPropagation(); return; }
+
+      const t = event.target;
+
+      // settings interactions
+      const themeChoice = t.closest("[data-theme-choice]");
+      if (themeChoice) { prefs.theme = themeChoice.dataset.themeChoice; applyTheme(); $$("#themeSeg button").forEach((b) => b.classList.toggle("active", b === themeChoice)); renderEditor(); return; }
+      const accentChoice = t.closest("[data-accent-choice]");
+      if (accentChoice) { prefs.accent = accentChoice.dataset.accentChoice; applyAccent(); $$("#accentRow .swatch").forEach((b) => b.classList.toggle("active", b === accentChoice)); renderEditor(); return; }
+      const setColor = t.closest("[data-set-tag-color]");
+      if (setColor) { const [id, color] = setColor.dataset.setTagColor.split(":"); await setTagColor(id, color); renderTagManage(); return; }
+      if (t.closest("#settingsAddTag")) { const tag = await createTag(); if (tag) { renderTagManage(); renderTags(); } return; }
+      if (t.closest("#settingsDone")) { els.settingsModal.classList.add("hidden"); return; }
+      if (t === els.settingsModal) { els.settingsModal.classList.add("hidden"); return; }
+
+      // popover content actions
+      const switchFolder = t.closest("[data-switch-folder]");
+      if (switchFolder) { state.selectedFolderId = switchFolder.dataset.switchFolder; closePopover(); renderAll(); return; }
+      const toggleNT = t.closest("[data-toggle-note-tag]");
+      if (toggleNT) { await toggleNoteTag(state.selectedNote.id, toggleNT.dataset.toggleNoteTag); openNoteTagPicker($("#addNoteTagBtn") || els.noteTagsEdit); return; }
+      if (t.closest("[data-create-note-tag]")) { const tag = await createTag(); if (tag && state.selectedNote) await toggleNoteTag(state.selectedNote.id, tag.id); closePopover(); return; }
+      const sortChoice = t.closest("[data-sort]");
+      if (sortChoice) { state.sortMode = sortChoice.dataset.sort; prefs.sort = state.sortMode; renderNotes(); $$("#popover [data-sort]").forEach((b) => b.classList.toggle("active", b === sortChoice)); return; }
+      const filterType = t.closest("[data-filter-type]");
+      if (filterType) { const ty = filterType.dataset.filterType; state.filterTypes.has(ty) ? state.filterTypes.delete(ty) : state.filterTypes.add(ty); filterType.classList.toggle("active"); renderNotes(); renderFilterState(); return; }
+      const filterTag = t.closest("[data-filter-tag]");
+      if (filterTag) { toggleTagFilter(filterTag.dataset.filterTag); filterTag.classList.toggle("active"); return; }
+      if (t.closest("[data-clear-filters]")) { state.filterTagIds.clear(); state.filterTypes.clear(); closePopover(); renderTags(); renderNotes(); renderFilterState(); return; }
+
+      const folderMove = t.closest("[data-folder-move]");
+      if (folderMove) { event.stopPropagation(); await moveNoteToFolder(els.popover.dataset.noteId, folderMove.dataset.folderMove); return; }
+      const noteAction = t.closest("[data-note-action]");
+      if (noteAction) {
+        event.stopPropagation();
+        const action = noteAction.dataset.noteAction, noteId = els.popover.dataset.noteId;
+        if (action === "move") { openMoveMenu(noteId, els.popover); return; }
+        closePopover();
+        if (action === "pin") await toggleNotePin(noteId);
+        else if (action === "rename") await renameNote(noteId);
+        else if (action === "duplicate") await duplicateNote(noteId);
+        else if (action === "share") await shareNote(noteId);
+        else if (action === "export") exportTxt(noteId);
+        else if (action === "delete") await deleteNote(noteId);
+        return;
+      }
+
+      // note tag remove / add
+      const removeTag = t.closest("[data-remove-tag]");
+      if (removeTag && state.selectedNote) { event.stopPropagation(); await toggleNoteTag(state.selectedNote.id, removeTag.dataset.removeTag); return; }
+      if (t.closest("#addNoteTagBtn")) { event.stopPropagation(); openNoteTagPicker(t.closest("#addNoteTagBtn")); return; }
+
+      // sidebar tag interactions
+      const renameTagBtn = t.closest("[data-rename-tag]");
+      if (renameTagBtn) { event.stopPropagation(); await renameTag(renameTagBtn.dataset.renameTag); return; }
+      const deleteTagBtn = t.closest("[data-delete-tag]");
+      if (deleteTagBtn) { event.stopPropagation(); if (confirm("Delete this tag? It will be removed from all notes.")) await deleteTag(deleteTagBtn.dataset.deleteTag); if (!els.settingsModal.classList.contains("hidden")) renderTagManage(); return; }
+      const tagFilter = t.closest("[data-tag-filter]");
+      if (tagFilter) { toggleTagFilter(tagFilter.dataset.tagFilter); return; }
+
+      // block & note menus
+      const noteMenu = t.closest("[data-note-menu]");
+      if (noteMenu) { event.preventDefault(); event.stopPropagation(); openNoteMenu(noteMenu.dataset.noteMenu, noteMenu); return; }
+      if (t.closest("#noteMenuBtn")) { event.preventDefault(); event.stopPropagation(); if (state.selectedNote) openNoteMenu(state.selectedNote.id, $("#noteMenuBtn")); return; }
+      if (t.closest("#filterBtn")) { event.stopPropagation(); openFilterPopover($("#filterBtn")); return; }
+      if (t.closest("#folderSwitcher")) { event.stopPropagation(); openFolderSwitcher($("#folderSwitcher")); return; }
+
+      const blockDelete = t.closest("[data-block-delete]");
+      if (blockDelete && state.selectedNote) { event.preventDefault(); event.stopPropagation(); state.selectedNote.blocks = state.selectedNote.blocks.filter((b) => b.id !== blockDelete.dataset.blockDelete); await saveNow(); renderEditor(); return; }
+
+      // ----- ordered photo-block items -----
+      const addItemImage = t.closest("[data-add-item-image]");
+      if (addItemImage) { event.preventDefault(); event.stopPropagation(); const [blockId, itemId] = addItemImage.dataset.addItemImage.split(":"); pickImage(blockId, itemId); return; }
+      const delItemImage = t.closest("[data-del-item-image]");
+      if (delItemImage && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, itemId, idx] = delItemImage.dataset.delItemImage.split(":");
+        const block = blockById(blockId); const item = block && itemById(block, itemId); if (!item) return;
+        item.images.splice(Number(idx), 1);
+        if (!item.images.length) block.data.items = block.data.items.filter((it) => it.id !== itemId);
+        ensureTrailingText(block.data.items);
+        await saveNow(); renderEditor(); toast("Photo removed"); return;
+      }
+      const viewItem = t.closest("[data-view-item]");
+      if (viewItem) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, itemId, idx] = viewItem.dataset.viewItem.split(":");
+        await openLightboxItem(blockId, itemId, Number(idx)); return;
+      }
+      const openItemFile = t.closest("[data-open-item-file]");
+      if (openItemFile && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, itemId] = openItemFile.dataset.openItemFile.split(":");
+        const item = itemById(blockById(blockId) || {}, itemId);
+        if (item?.attachmentId) { const blob = await getAttachmentBlob(item.attachmentId); if (blob) downloadBlob(blob, item.name); else toast("File data not found"); }
+        return;
+      }
+      const delItem = t.closest("[data-del-item]");
+      if (delItem && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, itemId] = delItem.dataset.delItem.split(":");
+        const block = blockById(blockId); if (!block) return;
+        block.data.items = (block.data.items || []).filter((it) => it.id !== itemId);
+        ensureTrailingText(block.data.items);
+        await saveNow(); renderEditor(); toast("Removed"); return;
+      }
+
+      const deleteImage = t.closest("[data-delete-image]");
+      if (deleteImage && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, idx] = deleteImage.dataset.deleteImage.split(":");
+        const block = blockById(blockId); if (!block) return;
+        const images = imageItems(block); images.splice(Number(idx), 1); setImageItems(block, images);
+        await saveNow(); renderEditor(); toast("Photo removed"); return;
+      }
+      const openFileBlock = t.closest("[data-open-file-block]");
+      if (openFileBlock && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const block = blockById(openFileBlock.dataset.openFileBlock);
+        if (block?.data.attachmentId) { const blob = await getAttachmentBlob(block.data.attachmentId); if (blob) downloadBlob(blob, block.data.name); else toast("File data not found"); }
+        return;
+      }
+      const openFile = t.closest("[data-open-file]");
+      if (openFile && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, idx] = openFile.dataset.openFile.split(":");
+        const file = blockById(blockId)?.data.files?.[Number(idx)];
+        if (file) { const blob = await getAttachmentBlob(file.attachmentId); if (blob) downloadBlob(blob, file.name); else toast("File data not found"); }
+        return;
+      }
+      const deleteFile = t.closest("[data-delete-file]");
+      if (deleteFile && state.selectedNote) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, idx] = deleteFile.dataset.deleteFile.split(":");
+        const block = blockById(blockId); if (!block?.data.files) return;
+        block.data.files.splice(Number(idx), 1);
+        await saveNow(); renderEditor(); toast("Removed"); return;
+      }
+      const viewImage = t.closest("[data-view-image]");
+      if (viewImage) {
+        event.preventDefault(); event.stopPropagation();
+        const [blockId, idx] = viewImage.dataset.viewImage.split(":");
+        await openLightbox(blockId, Number(idx)); return;
+      }
+      const attachFile = t.closest("[data-attach-file]");
+      if (attachFile) { event.preventDefault(); event.stopPropagation(); pickAttachmentInto(attachFile.dataset.attachFile); return; }
+      const insertItem = t.closest("[data-insert]");
+      if (insertItem) {
+        event.preventDefault(); event.stopPropagation();
+        const type = insertItem.dataset.insert;
+        const anchorId = els.popover.dataset.anchorId;
+        closePopover();
+        await insertBlockAfter(anchorId, type);
+        return;
+      }
+      const blockAdd = t.closest("[data-block-add]");
+      if (blockAdd) { event.preventDefault(); event.stopPropagation(); openInsertMenu(blockAdd.dataset.blockAdd, blockAdd); return; }
+
+      if (!t.closest("#popover")) closePopover();
+
+      const folderDelete = t.closest("[data-delete-folder]");
+      if (folderDelete) { event.preventDefault(); event.stopPropagation(); await deleteFolder(folderDelete.dataset.deleteFolder); return; }
+      const folderPin = t.closest("[data-pin-folder]");
+      if (folderPin) { event.preventDefault(); event.stopPropagation(); await toggleFolderPin(folderPin.dataset.pinFolder); return; }
+      const folderRename = t.closest("[data-rename-folder]");
+      if (folderRename) { event.preventDefault(); event.stopPropagation(); await renameFolder(folderRename.dataset.renameFolder); return; }
+      const folder = t.closest("[data-folder-id]");
+      if (folder) { state.selectedFolderId = folder.dataset.folderId; renderAll(); return; }
+      const note = t.closest("[data-note-id]");
+      if (note) { await selectNote(note.dataset.noteId); return; }
+
+      const add = t.closest("[data-add-block]");
+      if (add) {
+        if (add.dataset.addBlock === "file") { if (!state.selectedNote) { toast("Open a note first"); return; } pickAttachmentNew(""); return; }
+        await addBlock(add.dataset.addBlock); return;
+      }
+      const pick = t.closest("[data-pick-image]");
+      if (pick) { pickImage(pick.dataset.pickImage); return; }
+
+      const tableRow = t.closest("[data-table-row]");
+      if (tableRow) { const block = blockById(tableRow.dataset.tableRow); const row = Object.fromEntries((block.data.columns || []).map((c) => [c, ""])); state.tableInstances.get(block.id)?.addRow(row); block.data.rows = state.tableInstances.get(block.id)?.getData() || block.data.rows; queueSave(); return; }
+      const tableColumn = t.closest("[data-table-column]");
+      if (tableColumn) {
+        const block = blockById(tableColumn.dataset.tableColumn);
+        const name = await askForText({ title: "New column", value: `Column ${block.data.columns.length + 1}`, placeholder: "Column name" });
+        if (!name) return;
+        block.data.columns.push(name.trim());
+        block.data.rows = (block.data.rows || []).map((r) => ({ ...r, [name.trim()]: "" }));
+        await saveNow(); renderEditor(); return;
+      }
+      const chartFromTable = t.closest("[data-chart-from-table]");
+      if (chartFromTable) {
+        const tb = blockById(chartFromTable.dataset.chartFromTable);
+        const columns = tb.data.columns || [];
+        const chart = makeBlock("chart");
+        chart.data.labels = (tb.data.rows || []).map((r) => r[columns[0]] || "");
+        chart.data.values = (tb.data.rows || []).map((r) => Number(String(r[columns[1]]).replace(/[^0-9.-]/g, "")) || 0);
+        chart.data.title = tb.data.title || "Chart";
+        state.selectedNote.blocks.push(chart);
+        await saveNow(); renderEditor();
+      }
+    });
+
+    /* ============ Pointer drag ============ */
+    document.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest("button, input, select, textarea, audio, .editable, [contenteditable]")) return;
+      const folderRow = event.target.closest("[data-folder-id]");
+      const noteRow = event.target.closest("[data-note-id]");
+      const blockRow = event.target.closest("[data-block-id]");
+      if (!folderRow && !noteRow && !blockRow) return;
+      if (folderRow && folderRow.dataset.folderId === "all") return;
+      event.target.setPointerCapture?.(event.pointerId);
+      state.dragCandidate = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, folderId: folderRow?.dataset.folderId || null, noteId: noteRow?.dataset.noteId || null, blockId: blockRow?.dataset.blockId || null, started: false };
+    });
+    document.addEventListener("pointermove", (event) => {
+      const c = state.dragCandidate;
+      if (c && c.pointerId === event.pointerId && !c.started) {
+        if (Math.hypot(event.clientX - c.startX, event.clientY - c.startY) < 7) return;
+        c.started = true; state.suppressNextClick = true; document.getSelection()?.removeAllRanges();
+        if (c.folderId) state.folderPointerDrag = { folderId: c.folderId, targetId: null, placement: null };
+        if (c.noteId) state.notePointerDrag = { noteId: c.noteId, targetId: null, placement: null };
+        if (c.blockId) state.blockPointerDrag = { blockId: c.blockId, targetId: null, placement: null };
+      }
+      if (!state.folderPointerDrag && !state.notePointerDrag && !state.blockPointerDrag) return;
+      event.preventDefault();
+      if (state.folderPointerDrag) updateFolderPointerDrag(event.clientX, event.clientY);
+      if (state.notePointerDrag) updateNotePointerDrag(event.clientX, event.clientY);
+      if (state.blockPointerDrag) updateBlockPointerDrag(event.clientX, event.clientY);
+    });
+    document.addEventListener("pointerup", async () => {
+      const had = !!(state.folderPointerDrag || state.notePointerDrag || state.blockPointerDrag);
+      if (!had) { state.dragCandidate = null; return; }
+      const fd = state.folderPointerDrag, nd = state.notePointerDrag, bd = state.blockPointerDrag;
+      state.dragCandidate = null; state.folderPointerDrag = null; state.notePointerDrag = null; state.blockPointerDrag = null;
+      clearFolderDropState(); clearNoteDropState(); clearBlockDropState();
+      if (fd?.targetId && fd?.placement) await reorderFolder(fd.folderId, fd.targetId, fd.placement);
+      if (nd?.targetId && nd?.placement) await reorderNote(nd.noteId, nd.targetId, nd.placement);
+      if (bd?.targetId && bd?.placement) await reorderBlock(bd.blockId, bd.targetId, bd.placement);
+      setTimeout(() => { state.suppressNextClick = false; }, 0);
+    });
+    document.addEventListener("pointercancel", () => {
+      state.dragCandidate = null; state.folderPointerDrag = null; state.notePointerDrag = null; state.blockPointerDrag = null;
+      clearFolderDropState(); clearNoteDropState(); clearBlockDropState();
+    });
+
+    /* ============ Inputs ============ */
+    els.titleInput.addEventListener("input", () => { if (!state.selectedNote) return; state.selectedNote.title = els.titleInput.value; queueSave(); });
+    els.notesList.addEventListener("input", (event) => {
+      const title = event.target.closest("[data-note-title]");
+      if (!title) return;
+      const note = state.notes.find((n) => n.id === title.dataset.noteTitle);
+      if (!note) return;
+      note.title = title.textContent.trim() || "Untitled"; note.updatedAt = now();
+      if (state.selectedNote?.id === note.id) { state.selectedNote.title = note.title; els.titleInput.value = note.title; }
+      clearTimeout(state.noteTitleTimers.get(note.id));
+      state.noteTitleTimers.set(note.id, setTimeout(async () => { await db.notes.put(note); renderFolderSelect(); setSaveState(); }, 350));
+    });
+    els.notesList.addEventListener("keydown", (event) => { if (!event.target.closest("[data-note-title]")) return; if (event.key === "Enter") { event.preventDefault(); event.target.blur(); } });
+
+    els.blocks.addEventListener("input", (event) => {
+      const blockEl = event.target.closest("[data-block-id]");
+      if (!blockEl) return;
+      const block = blockById(blockEl.dataset.blockId);
+      if (!block) return;
+      if (event.target.matches("[data-item-text]")) {
+        const itemId = event.target.dataset.itemText.split(":")[1];
+        const item = itemById(block, itemId);
+        if (item) item.text = event.target.innerHTML;
+      } else if (event.target.matches("[contenteditable]") && event.target.dataset.field) {
+        block.data[event.target.dataset.field] = event.target.innerHTML;
+      }
+      if (event.target.matches("[data-field='checked']")) { block.data.checked = event.target.checked; event.target.closest(".check-block")?.classList.toggle("done", event.target.checked); }
+      if (event.target.matches("[data-chart-type]")) { block.data.chartType = event.target.value; refreshChartBlock(block); }
+      if (event.target.matches("[data-chart-labels]")) { block.data.labels = event.target.value.split(",").map((i) => i.trim()).filter(Boolean); refreshChartBlock(block); }
+      if (event.target.matches("[data-chart-values]")) { block.data.values = event.target.value.split(",").map((i) => Number(i.trim()) || 0); refreshChartBlock(block); }
+      queueSave();
+    });
+    els.blocks.addEventListener("change", (event) => {
+      if (!event.target.matches("[data-chart-type]")) return;
+      const blockEl = event.target.closest("[data-block-id]");
+      const block = blockById(blockEl?.dataset.blockId);
+      if (block) { block.data.chartType = event.target.value; refreshChartBlock(block); queueSave(); }
+    });
+
+    els.searchInput.addEventListener("input", () => { state.search = els.searchInput.value; renderNotes(); iconRefresh(); });
+    els.moveFolderSelect.addEventListener("change", async () => { if (!state.selectedNote) return; state.selectedNote.folderId = els.moveFolderSelect.value; await saveNow(); renderFolders(); toast("Note moved"); });
+
+    $("#newNoteBtn").addEventListener("click", () => createNote());
+    $("#newFolderBtn").addEventListener("click", createFolder);
+    $$("[data-new-folder]").forEach((b) => b.addEventListener("click", createFolder));
+    $("#addTagSidebar").addEventListener("click", async () => { const tag = await createTag(); if (tag) renderTags(); });
+    els.pinBtn.addEventListener("click", () => toggleNotePin());
+    $("#shareBtn").addEventListener("click", () => shareNote());
+    $("#exportJsonBtn").addEventListener("click", exportJson);
+    $("#exportTxtBtn").addEventListener("click", () => exportTxt());
+    $("#importBtn").addEventListener("click", () => els.importInput.click());
+    $("#openNotesBtn").addEventListener("click", () => els.noteListPane.classList.add("mobile-open"));
+    $("#closeNotesBtn").addEventListener("click", () => els.noteListPane.classList.remove("mobile-open"));
+    $("#settingsBtn").addEventListener("click", openSettings);
+    $("#signOutBtn").addEventListener("click", signOut);
+    $("#clearFilterBanner").addEventListener("click", () => { state.filterTagIds.clear(); state.filterTypes.clear(); renderTags(); renderNotes(); renderFilterState(); });
+    els.themeToggle.addEventListener("click", () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      prefs.theme = dark ? "light" : "dark"; applyTheme(); renderEditor();
+    });
+    els.recordBtn.addEventListener("click", () => state.recording ? stopRecording() : startRecording());
+
+    $("#settingsName").addEventListener("input", (e) => { prefs.name = e.target.value || "David"; renderProfile(); });
+
+    els.imageInput.addEventListener("change", async () => {
+      const files = Array.from(els.imageInput.files || []);
+      const block = blockById(els.imageInput.dataset.blockId);
+      if (!files.length || !block) { els.imageInput.value = ""; els.imageInput.dataset.itemId = ""; return; }
+      try {
+        setSaveState("Saving...");
+        if (block.type === "image") {
+          ensureItems(block);
+          const items = block.data.items;
+          const itemId = els.imageInput.dataset.itemId;
+          let group = itemId ? itemById(block, itemId) : items.find((it) => it.kind === "photos");
+          if (!group || group.kind !== "photos") {
+            group = { id: uid(), kind: "photos", images: [] };
+            let pos = items.length;
+            while (pos > 0 && items[pos - 1].kind === "text" && !String(items[pos - 1].text).trim()) pos--;
+            items.splice(pos, 0, group);
+          }
+          const newImgs = await filesToImageItems(block.id, files);
+          group.images = (group.images || []).concat(newImgs);
+          ensureTrailingText(items);
+          await saveNow(); renderEditor();
+          toast(files.length > 1 ? `${files.length} photos added` : "Photo added");
+        } else {
+          const { convertedCount, failedCount } = await addImagesToBlock(block, files);
+          await saveNow(); renderEditor();
+          if (failedCount) toast(`${failedCount} photo${failedCount > 1 ? "s" : ""} could not preview`);
+          else if (convertedCount) toast(`${convertedCount} HEIC photo${convertedCount > 1 ? "s" : ""} converted`);
+          else toast(files.length > 1 ? `${files.length} photos added` : "Photo added");
+        }
+      } catch { toast("Could not add those photos"); }
+      finally { els.imageInput.value = ""; els.imageInput.dataset.itemId = ""; }
+    });
+
+    function resetAttachInput() { els.attachInput.value = ""; els.attachInput.dataset.mode = ""; els.attachInput.dataset.blockId = ""; els.attachInput.dataset.anchorId = ""; }
+    els.attachInput.addEventListener("change", async () => {
+      const files = Array.from(els.attachInput.files || []);
+      if (!files.length || !state.selectedNote) { resetAttachInput(); return; }
+      const mode = els.attachInput.dataset.mode || "into";
+      try {
+        setSaveState("Saving...");
+        if (mode === "into") {
+          const block = blockById(els.attachInput.dataset.blockId);
+          if (!block) { resetAttachInput(); return; }
+          let photoCount = 0, docCount = 0, clipCount = 0;
+          if (block.type === "image") {
+            // Append everything to the END of the ordered block, below existing content.
+            ensureItems(block);
+            const items = block.data.items;
+            while (items.length && items[items.length - 1].kind === "text" && !String(items[items.length - 1].text).trim()) items.pop();
+            let i = 0;
+            while (i < files.length) {
+              if (isImageFile(files[i])) {
+                const run = [];
+                while (i < files.length && isImageFile(files[i])) run.push(files[i++]);
+                items.push({ id: uid(), kind: "photos", images: await filesToImageItems(block.id, run) });
+                photoCount += run.length;
+              } else {
+                const file = files[i++];
+                const mt = (file.type || "").toLowerCase();
+                const isVideo = mt.startsWith("video") || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
+                const isAudio = mt.startsWith("audio") || /\.(mp3|wav|m4a|aac|ogg|webm|flac)$/i.test(file.name);
+                const kind = isVideo ? "video" : isAudio ? "audio" : "file";
+                const attachmentId = await attachBlob(block.id, file, "file", file.name, file.type || "application/octet-stream");
+                items.push({ id: uid(), kind, attachmentId, name: file.name, mimeType: file.type || "", size: file.size || 0 });
+                kind === "file" ? docCount++ : clipCount++;
+              }
+            }
+            ensureTrailingText(items);
+          } else {
+            const imageFiles = files.filter(isImageFile);
+            if (imageFiles.length) { await addImagesToBlock(block, imageFiles); photoCount += imageFiles.length; }
+            block.data.files = block.data.files || [];
+            for (const file of files.filter((f) => !isImageFile(f))) {
+              const attachmentId = await attachBlob(block.id, file, "file", file.name, file.type || "application/octet-stream");
+              block.data.files.push({ id: uid(), attachmentId, name: file.name, mimeType: file.type || "", size: file.size || 0 });
+              ((file.type || "").startsWith("audio") || (file.type || "").startsWith("video")) ? clipCount++ : docCount++;
+            }
+          }
+          await saveNow(); renderEditor();
+          const parts = [];
+          if (photoCount) parts.push(`${photoCount} photo${photoCount > 1 ? "s" : ""}`);
+          if (clipCount) parts.push(`${clipCount} clip${clipCount > 1 ? "s" : ""}`);
+          if (docCount) parts.push(`${docCount} file${docCount > 1 ? "s" : ""}`);
+          toast(parts.length ? `Added ${parts.join(", ")}` : "Added");
+        } else {
+          // Standalone blocks (bottom File button): photos -> image block, docs -> file block, clips -> media block.
+          const blocks = state.selectedNote.blocks;
+          const anchorId = els.attachInput.dataset.anchorId;
+          const anchorIndex = anchorId ? blocks.findIndex((b) => b.id === anchorId) : -1;
+          let insertAt = anchorIndex >= 0 ? anchorIndex + 1 : blocks.length;
+          let photoCount = 0, docCount = 0, mediaCount = 0, i = 0;
+          while (i < files.length) {
+            if (isImageFile(files[i])) {
+              const run = [];
+              while (i < files.length && isImageFile(files[i])) run.push(files[i++]);
+              const nb = { id: uid(), type: "image", data: { caption: "", images: [] } };
+              blocks.splice(insertAt++, 0, nb);
+              await addImagesToBlock(nb, run);
+              photoCount += run.length;
+            } else {
+              const file = files[i++];
+              const isVideo = (file.type || "").startsWith("video") || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
+              const isAudio = (file.type || "").startsWith("audio") || /\.(mp3|wav|m4a|aac|ogg|webm|flac)$/i.test(file.name);
+              if (isVideo || isAudio) {
+                const type = isVideo ? "video" : "audio";
+                const nb = { id: uid(), type, data: { createdAt: now(), caption: "", images: [] } };
+                nb.data.attachmentId = await attachBlob(nb.id, file, type, file.name, file.type || (isVideo ? "video/mp4" : "audio/mpeg"));
+                blocks.splice(insertAt++, 0, nb);
+                mediaCount++;
+              } else {
+                const nb = { id: uid(), type: "file", data: { createdAt: now(), name: file.name, mimeType: file.type || "", size: file.size || 0 } };
+                nb.data.attachmentId = await attachBlob(nb.id, file, "file", file.name, file.type || "application/octet-stream");
+                blocks.splice(insertAt++, 0, nb);
+                docCount++;
+              }
+            }
+          }
+          await saveNow(); renderEditor();
+          const parts = [];
+          if (photoCount) parts.push(`${photoCount} photo${photoCount > 1 ? "s" : ""}`);
+          if (mediaCount) parts.push(`${mediaCount} clip${mediaCount > 1 ? "s" : ""}`);
+          if (docCount) parts.push(`${docCount} file${docCount > 1 ? "s" : ""}`);
+          toast(parts.length ? `Added ${parts.join(", ")}` : "Added");
+        }
+      } catch { toast("Could not attach those files"); }
+      finally { resetAttachInput(); }
+    });
+    els.mediaInput.addEventListener("change", async () => {
+      const files = Array.from(els.mediaInput.files || []);
+      if (!files.length || !state.selectedNote) { els.mediaInput.value = ""; els.mediaInput.dataset.anchorId = ""; return; }
+      const blocks = state.selectedNote.blocks;
+      const anchorId = els.mediaInput.dataset.anchorId;
+      const anchorIndex = anchorId ? blocks.findIndex((b) => b.id === anchorId) : -1;
+      let insertAt = anchorIndex >= 0 ? anchorIndex + 1 : blocks.length;
+      let videoCount = 0, audioCount = 0;
+      try {
+        setSaveState("Saving...");
+        for (const file of files) {
+          const isVideo = (file.type || "").startsWith("video") || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
+          const type = isVideo ? "video" : "audio";
+          const block = { id: uid(), type, data: { createdAt: now(), caption: "", images: [] } };
+          const attachmentId = await attachBlob(block.id, file, type, file.name, file.type || (isVideo ? "video/mp4" : "audio/mpeg"));
+          block.data.attachmentId = attachmentId;
+          blocks.splice(insertAt++, 0, block);
+          isVideo ? videoCount++ : audioCount++;
+        }
+        await saveNow(); renderEditor();
+        const parts = [];
+        if (videoCount) parts.push(`${videoCount} video${videoCount > 1 ? "s" : ""}`);
+        if (audioCount) parts.push(`${audioCount} recording${audioCount > 1 ? "s" : ""}`);
+        toast(`Added ${parts.join(" & ")}`);
+      } catch { toast("Could not add that media"); }
+      finally { els.mediaInput.value = ""; els.mediaInput.dataset.anchorId = ""; }
+    });
+    els.importInput.addEventListener("change", async () => {
+      const file = els.importInput.files[0];
+      if (!file) return;
+      try { await importJson(file); } catch { toast("Could not import that backup"); } finally { els.importInput.value = ""; }
+    });
+
+    $("#lbClose").addEventListener("click", closeLightbox);
+    $("#lbPrev").addEventListener("click", () => showLightbox(lb.index - 1));
+    $("#lbNext").addEventListener("click", () => showLightbox(lb.index + 1));
+    $("#lightbox").addEventListener("click", (e) => { if (e.target.id === "lightbox") closeLightbox(); });
+    document.addEventListener("keydown", (e) => {
+      const lightboxOpen = !$("#lightbox").classList.contains("hidden");
+      if (lightboxOpen) {
+        if (e.key === "Escape") closeLightbox();
+        else if (e.key === "ArrowLeft") showLightbox(lb.index - 1);
+        else if (e.key === "ArrowRight") showLightbox(lb.index + 1);
+        return;
+      }
+      if (e.key === "Escape") { closePopover(); els.settingsModal.classList.add("hidden"); }
+    });
+    window.addEventListener("resize", () => closePopover());
+    window.addEventListener("beforeunload", () => { if (state.recording) state.recording.stop(); });
+
+    /* ============================================================
+       Cloud sync (Supabase) — per-user snapshot + Storage for files
+       ============================================================ */
+    function scheduleSync() {
+      if (!cloudReady() || !syncReady) return;
+      setSyncState("Saving…");
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(pushSnapshot, 1500);
+    }
+    function setSyncState(text) { const el = $("#settingsSyncState"); if (el) el.textContent = text; }
+
+    // Strip heavy base64 image previews before sending to the cloud (the bytes live in Storage).
+    function stripHeavy(notes) {
+      return notes.map((n) => {
+        const c = structuredClone(n);
+        for (const b of (c.blocks || [])) {
+          if (Array.isArray(b.data.items)) for (const it of b.data.items) if (it.kind === "photos") for (const img of (it.images || [])) img.src = "";
+          if (Array.isArray(b.data.images)) for (const img of b.data.images) img.src = "";
+          if (b.data.src) b.data.src = "";
+        }
+        return c;
+      });
+    }
+
+    async function pushSnapshot() {
+      if (!cloudReady()) return;
+      try {
+        const attachments = (await db.attachments.toArray()).map((a) => ({ id: a.id, noteId: a.noteId, blockId: a.blockId, type: a.type, name: a.name, mimeType: a.mimeType, storagePath: a.storagePath || `${currentUser.id}/${a.id}`, createdAt: a.createdAt }));
+        const data = { v: 1, folders: state.folders, notes: stripHeavy(state.notes), tags: state.tags, attachments, updatedAt: now() };
+        const { error } = await sb.from("app_snapshots").upsert({ user_id: currentUser.id, data, updated_at: new Date().toISOString() });
+        setSyncState(error ? "Sync error — will retry" : "All changes synced");
+        if (error) { console.warn("sync push failed", error.message); clearTimeout(syncTimer); syncTimer = setTimeout(pushSnapshot, 5000); }
+      } catch (e) { console.warn("sync push error", e); }
+    }
+    async function fetchSnapshot() {
+      const { data, error } = await sb.from("app_snapshots").select("data").eq("user_id", currentUser.id).maybeSingle();
+      if (error) { console.warn("sync fetch failed", error.message); return null; }
+      return data?.data || null;
+    }
+    async function loadSnapshotIntoDexie(remote) {
+      await db.transaction("rw", db.folders, db.notes, db.tags, db.attachments, async () => {
+        await db.folders.clear(); await db.notes.clear(); await db.tags.clear();
+        if (remote.folders?.length) await db.folders.bulkAdd(remote.folders);
+        if (remote.notes?.length) await db.notes.bulkAdd(remote.notes);
+        if (remote.tags?.length) await db.tags.bulkAdd(remote.tags);
+        for (const m of (remote.attachments || [])) {
+          const ex = await db.attachments.get(m.id);
+          if (ex) await db.attachments.update(m.id, { storagePath: m.storagePath || ex.storagePath });
+          else await db.attachments.add({ ...m, blob: undefined });
+        }
+      });
+    }
+    async function initialSync() {
+      setSyncState("Syncing…");
+      let remote = null;
+      try { remote = await fetchSnapshot(); } catch (e) { console.warn(e); }
+      if (remote && Array.isArray(remote.notes)) await loadSnapshotIntoDexie(remote);
+      await loadAll();
+      if (!remote || !Array.isArray(remote.notes)) { await pushSnapshot(); } // first login: seed cloud from local
+      syncReady = true;
+      setSyncState("All changes synced");
+    }
+
+    /* ---------- Auth UI ---------- */
+    let authMode = "login";
+    const authEls = {
+      gate: $("#authGate"), form: $("#authForm"), title: $("#authTitle"), sub: $("#authSub"),
+      email: $("#authEmail"), pw: $("#authPassword"), pw2: $("#authPassword2"),
+      submit: $("#authSubmit"), error: $("#authError"), note: $("#authNote"),
+      switchText: $("#authSwitchText"), switchBtn: $("#authSwitchBtn")
+    };
+    function showAuth() { authEls.gate.classList.remove("hidden"); iconRefresh(); }
+    function hideAuth() { authEls.gate.classList.add("hidden"); }
+    function authError(msg) { authEls.error.textContent = msg; authEls.error.classList.toggle("hidden", !msg); }
+    function authNote(msg) { authEls.note.textContent = msg || ""; authEls.note.classList.toggle("hidden", !msg); }
+    function setAuthMode(mode) {
+      authMode = mode; authError(""); authNote("");
+      const register = mode === "register";
+      authEls.title.textContent = register ? "Create your account" : "Welcome back";
+      authEls.sub.textContent = register ? "Sign up to sync your notes across devices." : "Log in to access your notes on any device.";
+      authEls.submit.textContent = register ? "Create account" : "Log in";
+      authEls.pw2.classList.toggle("hidden", !register);
+      authEls.pw.setAttribute("autocomplete", register ? "new-password" : "current-password");
+      authEls.switchText.textContent = register ? "Already have an account?" : "New to Note Buddy?";
+      authEls.switchBtn.textContent = register ? "Log in" : "Create an account";
+    }
+    authEls.switchBtn.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
+    authEls.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      authError("");
+      const email = authEls.email.value.trim(), pw = authEls.pw.value;
+      if (authMode === "register" && pw !== authEls.pw2.value) { authError("Passwords don't match."); return; }
+      if (pw.length < 6) { authError("Password must be at least 6 characters."); return; }
+      authEls.submit.disabled = true;
+      authEls.submit.textContent = authMode === "register" ? "Creating…" : "Logging in…";
+      try {
+        if (authMode === "register") {
+          const { data, error } = await sb.auth.signUp({ email, password: pw });
+          if (error) throw error;
+          if (!data.session) { authNote("Account created! Check your email to confirm, then log in."); setAuthMode("login"); }
+          else { currentUser = data.user; await afterLogin(); }
+        } else {
+          const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
+          if (error) throw error;
+          currentUser = data.user; await afterLogin();
+        }
+      } catch (err) {
+        authError(err?.message || "Something went wrong. Please try again.");
+      } finally {
+        authEls.submit.disabled = false;
+        authEls.submit.textContent = authMode === "register" ? "Create account" : "Log in";
+      }
+    });
+
+    async function afterLogin() {
+      hideAuth();
+      if (currentUser?.email) { prefs.name = prefs.name && prefs.name !== "David" ? prefs.name : currentUser.email.split("@")[0]; }
+      await initialSync();
+      renderProfile();
+    }
+    async function signOut() {
+      try { await sb.auth.signOut(); } catch {}
+      currentUser = null; syncReady = false;
+      els.settingsModal.classList.add("hidden");
+      setAuthMode("login"); showAuth();
+    }
+
+    /* ---------- Boot ---------- */
+    applyTheme(); applyAccent();
+    async function boot() {
+      if (cloudConfigured && window.supabase?.createClient) {
+        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        setAuthMode("login");
+        try {
+          const { data: { session } } = await sb.auth.getSession();
+          if (session?.user) { currentUser = session.user; await afterLogin(); }
+          else showAuth();
+        } catch (e) { console.warn(e); showAuth(); }
+        sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { currentUser = null; syncReady = false; showAuth(); } });
+      } else {
+        // Local-only mode (no Supabase configured) — works fully offline in this browser.
+        await loadAll();
+      }
+    }
+    boot().catch((error) => { console.error(error); toast("Note Buddy could not start"); });
+  </script>
+</body>
+</html>
